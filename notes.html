@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0a0f0d">
+    <meta name="description" content="notes — a small personal journal.">
+    <title>~/notes</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon/favicon.svg">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="notes">
+
+    <div class="ambient" aria-hidden="true"></div>
+
+    <div class="shell">
+
+        <header class="topbar">
+            <a class="topbar__path" href="index.html" title="back home">
+                <span class="topbar__prompt">~</span><span class="topbar__user">/mythicalpengu</span>
+            </a>
+            <nav class="topbar__nav" aria-label="site">
+                <a class="topbar__link" href="index.html">home</a>
+                <a class="topbar__link is-current" href="notes.html" aria-current="page">notes</a>
+            </nav>
+        </header>
+
+        <main class="main main--wide" id="main">
+
+            <section class="notes-head">
+                <h1 class="notes-head__title"><span class="notes-head__comment">//</span> notes</h1>
+                <p class="notes-head__sub" id="notes-sub">things written down, mostly for myself.</p>
+                <div class="notes-head__actions" id="owner-actions" hidden>
+                    <button type="button" class="btn" id="btn-new-note">+ new note</button>
+                    <button type="button" class="btn btn--ghost" id="btn-show-drafts">drafts</button>
+                    <button type="button" class="btn btn--ghost" id="btn-logout">log out</button>
+                </div>
+            </section>
+
+            <section class="notes" id="notes-list" aria-live="polite">
+                <p class="notes__loading"><span class="notes__loading-text">reading /notes</span><span class="cursor" aria-hidden="true">_</span></p>
+            </section>
+
+        </main>
+
+        <footer class="footer">
+            <span class="footer__copy">© <span id="footer-user">mythicalpengu</span> <span class="footer__year" id="footer-year"></span></span>
+            <span class="footer__line">written down before i forgot</span>
+            <span class="footer__owner-wrap">
+                <a href="#" class="footer__owner" id="owner-link">owner</a>
+            </span>
+        </footer>
+
+    </div>
+
+    <!-- note editor overlay (owner only) -->
+    <div id="editor" class="editor" hidden>
+        <div class="editor__backdrop" data-editor-close></div>
+        <div class="editor__panel" role="dialog" aria-modal="true" aria-label="note editor">
+            <div class="editor__head">
+                <span class="editor__title" id="editor-title">// new note</span>
+                <button type="button" class="editor__close" data-editor-close aria-label="close editor">×</button>
+            </div>
+            <form class="editor__form" id="editor-form">
+                <label class="field">
+                    <span class="field__label">title</span>
+                    <input class="field__input" type="text" id="note-title" maxlength="120" required autocomplete="off">
+                </label>
+                <div class="editor__row">
+                    <label class="field">
+                        <span class="field__label">date</span>
+                        <input class="field__input" type="date" id="note-date">
+                    </label>
+                    <label class="field">
+                        <span class="field__label">tags <span class="field__hint">(comma separated)</span></span>
+                        <input class="field__input" type="text" id="note-tags" maxlength="120" autocomplete="off" placeholder="random, build">
+                    </label>
+                </div>
+                <label class="field">
+                    <span class="field__label">body <span class="field__hint">(markdown-ish, kept simple)</span></span>
+                    <textarea class="field__input field__input--body" id="note-body" rows="10" maxlength="20000"></textarea>
+                </label>
+                <div class="editor__status" id="editor-status" role="status"></div>
+                <div class="editor__actions">
+                    <button type="submit" class="btn" id="btn-save-note">save draft</button>
+                    <button type="button" class="btn" id="btn-publish-note">publish</button>
+                    <button type="button" class="btn btn--danger" id="btn-delete-note" hidden>delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- delete confirmation -->
+    <div id="confirm" class="confirm" hidden>
+        <div class="confirm__backdrop"></div>
+        <div class="confirm__panel" role="alertdialog" aria-modal="true" aria-label="confirm delete">
+            <p class="confirm__text">delete this note?</p>
+            <p class="confirm__detail" id="confirm-detail"></p>
+            <div class="confirm__actions">
+                <button type="button" class="btn btn--ghost" id="confirm-cancel">keep it</button>
+                <button type="button" class="btn btn--danger" id="confirm-delete">delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- toast -->
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="js/notes-page.js"></script>
+</body>
+</html>
