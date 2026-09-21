@@ -32,6 +32,8 @@
             </a>
             <nav class="topbar__nav" aria-label="site">
                 <a class="topbar__link is-current" href="index.html" aria-current="page">home</a>
+                <a class="topbar__link" href="about.html">about</a>
+                <a class="topbar__link" href="mc.html">mc</a>
                 <a class="topbar__link" href="notes.html">notes</a>
             </nav>
         </header>
@@ -40,22 +42,19 @@
 
             <section class="identity">
                 <p class="identity__path" aria-hidden="true"><span id="identity-path">/home/mythicalpengu</span></p>
-                <h1 class="identity__hello">hey, i'm <span class="identity__name" id="identity-name">mythicalpengu</span><span class="identity__dot">.</span></h1>
+                <h1 class="identity__hello">hey, i'm <span class="identity__name" id="identity-name">mythicalpengu</span><span class="identity__dot">.</span><span class="presence-dot presence-dot--offline" id="presence-dot" title=""></span></h1>
+                <p class="identity__custom" id="presence-custom" hidden></p>
                 <p class="identity__title" id="identity-title">This is my website!</p>
                 <p class="identity__desc" id="identity-desc">I do things</p>
+                <p class="identity__activity" id="presence-activity" hidden></p>
             </section>
 
-            <section class="presence-card" id="presence-card" aria-label="live presence">
-                <div class="presence-card__head">
-                    <span class="presence-status">
-                        <span class="presence-dot presence-dot--idle" id="presence-dot"></span>
-                        <span class="presence-status__label" id="presence-status">checking presence...</span>
-                    </span>
-                    <span class="presence-card__label">// presence</span>
-                </div>
-                <div class="presence-card__body" id="presence-body">
-                    <p class="presence-card__muted" id="presence-hint">asking the presence service, one moment</p>
-                </div>
+            <section class="mc-widget" id="mc-widget" aria-label="minecraft server status">
+                <a class="mc-widget__link" href="mc.html">
+                    <span class="mc-widget__dot" id="mc-dot"></span>
+                    <span class="mc-widget__label" id="mc-label">mc server: checking...</span>
+                    <span class="mc-widget__hint" id="mc-hint"></span>
+                </a>
             </section>
 
             <section class="links" aria-label="links">

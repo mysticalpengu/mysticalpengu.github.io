@@ -1,8 +1,8 @@
 const CONFIG = {
     username: "mythicalpengu",
     displayName: "",
-    title: "YOUR_TITLE",
-    description: "YOUR_DESCRIPTION",
+    title: "This is my website!",
+    description: "I do things",
 
     discordUserId: "1497173080131371048",
     discordUsername: "mythicalpengu",
@@ -13,7 +13,14 @@ const CONFIG = {
     minecraftUsername: "mythicalpengu",
     minecraftUrl: "https://namemc.com/profile/mythicalpengu.2",
 
+    // notes backend base url (the cloudflare worker)
     notesApi: "https://mythicalpengu-notes.mysticalpengu.workers.dev",
+
+    // minecraft server — address used for the status widget (ip or hostname[:port])
+    mcServerAddress: "YOUR_MC_SERVER_ADDRESS",
+
+    // what shows as the copy address on the mc page; defaults to mcServerAddress
+    mcServerDisplay: "",
 
     profileImage: "",
 

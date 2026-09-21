@@ -11,6 +11,8 @@ function commands() {
     const configured = (v) => v && !v.startsWith("YOUR_");
     const cmds = [
         { name: "home", hint: "index.html", run: () => navigate("index.html") },
+        { name: "about", hint: "about.html", run: () => navigate("about.html") },
+        { name: "mc", hint: "mc.html", run: () => navigate("mc.html") },
         { name: "notes", hint: "notes.html", run: () => navigate("notes.html") },
         { name: "replay boot", hint: "?boot=1", run: () => navigate("index.html?boot=1") },
     ];

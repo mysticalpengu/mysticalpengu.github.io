@@ -3,18 +3,20 @@
 import { CONFIG, checkConfig } from "./config.js";
 import { playBoot } from "./boot.js";
 import { initPresence } from "./presence.js";
+import { initMcWidget } from "./mc.js";
 import { initPalette } from "./commands.js";
 import { copyText, showToast } from "./ui.js";
 
 const configured = (v) => v && !v.startsWith("YOUR_");
-const lower = (v) => (v || "").toLowerCase();
+const user = (CONFIG.username || "").toLowerCase() || "mythicalpengu";
 
 applyConfig();
 initPalette();
 initPresence();
+initMcWidget();
 
 // boot plays after first paint of the core page
-playBoot(CONFIG.username);
+playBoot();
 
 // footer year
 const year = document.getElementById("footer-year");
@@ -31,8 +33,6 @@ if (CONFIG.devMode && !checkConfig(true)) {
 }
 
 function applyConfig() {
-    const user = lower(CONFIG.username) || "mythicalpengu";
-
     document.title = `~/${user}`;
     const ogTitle = document.querySelector('meta[property="og:title"]');
     if (ogTitle) ogTitle.content = `~/${user}`;
@@ -59,6 +59,8 @@ function applyConfig() {
         }
         if (configured(CONFIG.minecraftUrl)) {
             items.push({ label: "minecraft", href: CONFIG.minecraftUrl, external: true });
+        } else {
+            items.push({ label: "minecraft", href: "mc.html" });
         }
         if (configured(CONFIG.discordUsername)) {
             items.push({ label: "discord", action: async () => {
