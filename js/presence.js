@@ -139,6 +139,9 @@ async function fetchRestOnce(dot) {
 // rendering
 // ---------------------------------------------------------------------------
 function render(data, dot) {
+    // let other widgets (the mc one) react to what i'm playing
+    window.dispatchEvent(new CustomEvent("presence:update", { detail: data }));
+
     const status = data.discord_status || "offline";
     setDot(dot, status);
 

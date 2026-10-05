@@ -81,7 +81,7 @@ test("tokens: valid, missing, garbage, tampered and expired", async () => {
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.SESSION_SECRET),
         { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const past = Math.floor(Date.now() / 1000) - 10;
-    const raw = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`owner.${past}`)));
+    const raw = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`owner.${past}.env`)));
     const b64 = btoa(String.fromCharCode(...raw)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     assert.equal((await call(env, "GET", "/auth/me", { token: `${past}.${b64}` })).data.owner, false);
 });
@@ -149,4 +149,104 @@ test("unknown routes 404 as json", async () => {
     const { res, data } = await call(makeEnv(), "GET", "/nope");
     assert.equal(res.status, 404);
     assert.equal(data.error, "not found");
+});
+
+// ---------------------------------------------------------------------------
+// changing the password
+// ---------------------------------------------------------------------------
+const NEW_PASSWORD = "a brand new passphrase";
+
+async function change(env, token, current, next, extra = {}) {
+    return call(env, "POST", "/auth/password", { body: { current, next }, token, ...extra });
+}
+
+test("password change: needs a session, the right current password, and a sane new one", async () => {
+    const env = makeEnv();
+    const { token } = await login(env);
+
+    assert.equal((await change(env, undefined, PASSWORD, NEW_PASSWORD)).res.status, 401);          // no session
+    const wrong = await change(env, token, "not the password", NEW_PASSWORD);
+    assert.equal(wrong.res.status, 403);                                                          // wrong current
+    assert.equal((await call(env, "GET", "/auth/me", { token })).data.owner, true);               // 403 must not log you out
+
+    assert.equal((await change(env, token, PASSWORD, "short")).res.status, 400);
+    assert.equal((await change(env, token, PASSWORD, PASSWORD)).res.status, 400);
+    assert.equal((await change(env, token, PASSWORD, "x".repeat(257))).res.status, 400);
+    assert.equal((await call(env, "POST", "/auth/password", { body: { next: NEW_PASSWORD }, token })).res.status, 400);
+});
+
+test("password change: old password stops working, new one works, session stays alive, old sessions die", async () => {
+    const env = makeEnv();
+    const first = await login(env);
+    const other = await login(env);                                   // a second device
+
+    const changed = await change(env, first.token, PASSWORD, NEW_PASSWORD);
+    assert.equal(changed.res.status, 200);
+    const fresh = changed.data.token;
+
+    assert.equal((await call(env, "GET", "/auth/me", { token: fresh })).data.owner, true);        // this browser stays in
+    assert.equal((await call(env, "GET", "/auth/me", { token: first.token })).data.owner, false); // old token is dead
+    assert.equal((await call(env, "GET", "/auth/me", { token: other.token })).data.owner, false); // so is the other device
+
+    assert.equal((await login(env, PASSWORD)).status, 401);          // the secret no longer works
+    assert.equal((await login(env, NEW_PASSWORD)).status, 200);
+
+    // the new token really authorizes writes
+    const note = { title: "t", body: "b", date: "2026-10-04", tags: [], status: "draft" };
+    assert.equal((await call(env, "POST", "/notes", { body: note, token: fresh })).res.status, 201);
+});
+
+test("password change: stored as a salted hash, never the password itself", async () => {
+    const env = makeEnv();
+    const { token } = await login(env);
+    await change(env, token, PASSWORD, NEW_PASSWORD);
+
+    const raw = env.NOTES_KV.map.get("auth:password");
+    assert.ok(raw && !raw.includes(NEW_PASSWORD) && !raw.includes(PASSWORD));
+    const record = JSON.parse(raw);
+    assert.ok(record.salt && record.hash && record.iter >= 10000 && record.v);
+
+    // same password changed twice gets a different salt and hash
+    const t2 = (await login(env, NEW_PASSWORD)).token;
+    await change(env, t2, NEW_PASSWORD, PASSWORD + "!");
+    await change(env, (await login(env, PASSWORD + "!")).token, PASSWORD + "!", NEW_PASSWORD);
+    const again = JSON.parse(env.NOTES_KV.map.get("auth:password"));
+    assert.notEqual(again.salt, record.salt);
+    assert.notEqual(again.hash, record.hash);
+});
+
+test("password change: keeps working after the OWNER_PASSWORD secret is removed", async () => {
+    const env = makeEnv();
+    const { token } = await login(env);
+    await change(env, token, PASSWORD, NEW_PASSWORD);
+
+    delete env.OWNER_PASSWORD;
+    assert.equal((await login(env, NEW_PASSWORD)).status, 200);
+});
+
+test("password change: wrong current passwords count toward the lockout", async () => {
+    const env = makeEnv();
+    const { token } = await login(env);
+    for (let i = 0; i < 5; i++) assert.equal((await change(env, token, "nope", NEW_PASSWORD)).res.status, 403);
+    assert.equal((await change(env, token, PASSWORD, NEW_PASSWORD)).res.status, 429);
+});
+
+test("recovery: deleting the kv password goes back to the secret", async () => {
+    const env = makeEnv();
+    const { token } = await login(env);
+    await change(env, token, PASSWORD, NEW_PASSWORD);
+    assert.equal((await login(env, PASSWORD)).status, 401);
+
+    env.NOTES_KV.map.delete("auth:password");
+    assert.equal((await login(env, PASSWORD)).status, 200);
+});
+
+test("password change: pbkdf2 cost stays small enough for a free worker", async () => {
+    const env = makeEnv();
+    const { token } = await login(env);
+    const t0 = performance.now();
+    await change(env, token, PASSWORD, NEW_PASSWORD);
+    const ms = performance.now() - t0;
+    console.log(`  (change + hashing took ${ms.toFixed(1)} ms in node)`);
+    assert.ok(ms < 500);
 });

@@ -92,6 +92,14 @@ export async function login(password) {
     safeStorage.set(TOKEN_KEY, JSON.stringify({ token: data.token, expires: data.expires }));
 }
 
+// change the owner password. the server answers with a fresh token (all older
+// ones stop working), which replaces the stored one so this browser stays logged in.
+// errors: 403 = current password was wrong, 401 = session expired
+export async function changePassword(current, next) {
+    const data = await request("/auth/password", jsonOptions("POST", { current, next }), { auth: true });
+    safeStorage.set(TOKEN_KEY, JSON.stringify({ token: data.token, expires: data.expires }));
+}
+
 // asks the server whether the stored token is still good (never trusts local state)
 export async function whoAmI() {
     if (!configured() || !hasSession()) return { owner: false };

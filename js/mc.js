@@ -3,6 +3,7 @@
 
 import { CONFIG } from "./config.js";
 import { copyText, showToast } from "./ui.js";
+import { minecraftPlaying } from "./playing.js";
 
 const STATUS_API = "https://api.mcstatus.io/v2/status/java/";
 const REFRESH_MS = 60 * 1000;
@@ -56,6 +57,7 @@ export async function fetchStatus() {
 
 // ---------------------------------------------------------------------------
 // landing page widget: "● mc server: online · 3/20  →"
+// while i'm actually playing (per discord), it shows that instead.
 // ---------------------------------------------------------------------------
 export function initMcWidget() {
     const widget = document.getElementById("mc-widget");
@@ -65,17 +67,34 @@ export function initMcWidget() {
     const label = document.getElementById("mc-label");
     const hint = document.getElementById("mc-hint");
 
-    if (!configured()) {
-        widget.hidden = true;
-        return;
+    let live = null;     // what discord says i'm playing right now, or null
+    let state = configured() ? { checking: true } : { unconfigured: true };
+
+    window.addEventListener("presence:update", (e) => {
+        live = minecraftPlaying(e.detail);
+        render();
+    });
+
+    if (configured()) {
+        fetchStatus().then((s) => { state = s; render(); });
+        setInterval(async () => { state = await fetchStatus(); render(); }, REFRESH_MS);
     }
+    render();
 
-    paint({ checking: true });
-    fetchStatus().then(paint);
-    setInterval(async () => paint(await fetchStatus()), REFRESH_MS);
-
-    function paint(state) {
+    function render() {
         if (!dot || !label) return;
+
+        if (live) {
+            widget.hidden = false;
+            dot.className = "mc-widget__dot mc-widget__dot--up";
+            dot.title = "playing right now";
+            label.textContent = live.text ? `playing now · ${live.text}` : "playing minecraft now";
+            if (hint) hint.textContent = "→";
+            return;
+        }
+
+        if (state.unconfigured) { widget.hidden = true; return; }
+        widget.hidden = false;
 
         if (state.checking) {
             dot.className = "mc-widget__dot mc-widget__dot--checking";
@@ -83,8 +102,6 @@ export function initMcWidget() {
             if (hint) hint.textContent = "";
             return;
         }
-
-        if (state.unconfigured) { widget.hidden = true; return; }
 
         if (state.error) {
             dot.className = "mc-widget__dot mc-widget__dot--down";

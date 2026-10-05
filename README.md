@@ -18,6 +18,7 @@ website/
 │   ├── mc-page.js        mc page entry
 │   ├── mc.js             mc server status (mcstatus.io)
 │   ├── mc-control.js     start/stop panel on the mc page
+│   ├── playing.js        "am i playing minecraft + what does discord say" helper
 │   ├── notes-page.js     notes entry (list, login, editor)
 │   ├── notes.js          notes api client + owner token
 │   ├── boot.js           boot sequence (ssh + apt install story)
@@ -71,6 +72,8 @@ edit `js/config.js`:
    wrangler secret put SESSION_SECRET     # e.g. output of: openssl rand -hex 32
    wrangler deploy
    ```
+   `OWNER_PASSWORD` is only your *starting* password: log in, press **password** on the notes page and set your own.
+   from then on it's stored hashed in kv and the secret is ignored (forgot it? see "forgot the password" below).
    the old discord oauth secrets aren't used any more — see `backend/README.md` to remove them
 2. **join the lanyard discord** — https://discord.gg/lanyard — makes presence live
 3. **set `mcServerAddress`** (and `mcControlUrl` for the start/stop panel)
@@ -110,6 +113,9 @@ shows: status dot, custom status, activity ("playing minecraft · 42m", spotify 
 ## mc status
 
 homepage widget + `/mc` page both use https://mcstatus.io (public api, no key).
+the homepage widget switches to "playing now · …" while discord says you're in minecraft, using the
+status lines discord already shows (see `js/playing.js`). discord only knows the server if your game or
+launcher puts it in the status, otherwise it just says "playing minecraft now".
 note: some big servers (e.g. hypixel) block status pings entirely — if a server
 always shows offline, that's the server blocking it, not the site.
 
@@ -130,11 +136,18 @@ always shows offline, that's the server blocking it, not the site.
 2. notes page → `+ new note` / edit / publish / unpublish / delete
 3. drafts live on the server and are never public; an unsaved *new* note is kept on your device if you close the editor
 4. delete asks for confirmation; `log out` forgets the token on this device
+5. **password** button → current + new password. this logs out every other device and keeps this one logged in
+
+### forgot the password
+
+in the cloudflare dashboard open the worker's kv namespace (`NOTES_KV`) and delete the key `auth:password`.
+the login goes back to the `OWNER_PASSWORD` secret. change the secret first if you want a new starting password.
 
 ## security model
 
 - frontend js contains no secrets — everything in `js/` is public
 - auth: password → worker checks it in constant time → returns an hmac-signed token (7 days).
+  changing the password stores a salted pbkdf2 hash (never the password) and invalidates every older token.
   the site keeps it in local storage and sends it as a bearer header. no cookies
 - 5 wrong passwords per ip per 15 minutes, plus a short delay on each wrong guess
 - authorization: every write re-verifies the token server-side
@@ -154,7 +167,7 @@ in `backend/wrangler.toml`, and your two secrets in `backend/.dev.vars`.
 ## tests
 
 ```bash
-node --test test/markdown.test.mjs backend/test/worker.test.mjs
+node --test test/markdown.test.mjs test/playing.test.mjs backend/test/worker.test.mjs
 ```
 
 ## deploy updates
@@ -172,6 +185,7 @@ git add -A && git commit -m "update" && git push
 | `couldn't reach the notes service` | worker down, or `notesApi` wrong |
 | `owner login isn't set up on the server yet` | `OWNER_PASSWORD` / `SESSION_SECRET` not set — see "still to do" |
 | `too many tries` on login | 5 wrong passwords from your ip; wait 15 minutes |
+| forgot the owner password | delete the `auth:password` key in the `NOTES_KV` namespace (see "forgot the password") |
 | logged out on every visit | browser blocks local storage (private mode) — the token only lives for the tab then |
 | mc server shows offline | server actually offline, or it blocks status pings (hypixel does) |
 | boot never replays | plays once per session — palette → `replay boot`, or `index.html?boot=1` |

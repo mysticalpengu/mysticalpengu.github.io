@@ -44,6 +44,7 @@
                 <div class="notes-head__actions" id="owner-actions" hidden>
                     <button type="button" class="btn" id="btn-new-note">+ new note</button>
                     <button type="button" class="btn btn--ghost" id="btn-show-drafts">drafts</button>
+                    <button type="button" class="btn btn--ghost" id="btn-password">password</button>
                     <button type="button" class="btn btn--ghost" id="btn-logout">log out</button>
                 </div>
             </section>
@@ -115,6 +116,34 @@
             <div class="confirm__actions">
                 <button type="button" class="btn btn--ghost" id="login-cancel">cancel</button>
                 <button type="submit" class="btn" id="login-submit">log in</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- change password -->
+    <div id="password" class="confirm" hidden>
+        <div class="confirm__backdrop" data-password-close></div>
+        <form class="confirm__panel login__panel" id="password-form" role="dialog" aria-modal="true" aria-labelledby="password-title">
+            <p class="confirm__text" id="password-title">change password</p>
+            <label class="field">
+                <span class="field__label">current password</span>
+                <input class="field__input" type="password" id="pw-current" maxlength="256"
+                       autocomplete="current-password" required>
+            </label>
+            <label class="field">
+                <span class="field__label">new password (10+ characters)</span>
+                <input class="field__input" type="password" id="pw-new" maxlength="256" minlength="10"
+                       autocomplete="new-password" required>
+            </label>
+            <label class="field">
+                <span class="field__label">repeat new password</span>
+                <input class="field__input" type="password" id="pw-repeat" maxlength="256" minlength="10"
+                       autocomplete="new-password" required>
+            </label>
+            <div class="editor__status" id="password-status" role="status"></div>
+            <div class="confirm__actions">
+                <button type="button" class="btn btn--ghost" id="pw-cancel">cancel</button>
+                <button type="submit" class="btn" id="pw-submit">update</button>
             </div>
         </form>
     </div>

@@ -7,6 +7,7 @@ notes api — cloudflare worker + kv · owner password login · owner-only write
 ```
 POST   /auth/login        { password } → { token, expires }
 GET    /auth/me           → { authenticated, owner }   (send the token, see below)
+POST   /auth/password     { current, next } → { token, expires }   (owner only; 403 = wrong current password)
 POST   /auth/logout       → { ok }                     (the site just forgets the token)
 GET    /notes             → published notes (public)
 GET    /notes?all=1       → all notes incl. drafts (owner only)
@@ -42,17 +43,28 @@ wrangler secret delete DISCORD_CLIENT_SECRET
 wrangler secret delete OWNER_DISCORD_ID
 ```
 
+## the password
+
+`OWNER_PASSWORD` is the *starting* password. after you change it from the site (notes page → **password**),
+a salted pbkdf2 hash is kept in kv under `auth:password`, and the secret is ignored from then on.
+changing it also invalidates every login token, so other devices get logged out; the browser you
+changed it from gets a fresh token and stays in.
+
+forgot it? in the cloudflare dashboard open the `NOTES_KV` namespace and delete the key `auth:password` —
+the login goes back to whatever the `OWNER_PASSWORD` secret says.
+
 ## configuration
 
 | var | where | value |
 |---|---|---|
 | `ALLOWED_ORIGIN` | wrangler.toml `[vars]` | `https://mysticalpengu.github.io` (comma-separate to allow more) |
-| `OWNER_PASSWORD` | secret | your login password |
+| `OWNER_PASSWORD` | secret | your starting password (change it from the site afterwards) |
 | `SESSION_SECRET` | secret | random 32+ byte string |
 
 ## security
 
-- login tokens are hmac-signed and expire after 7 days. changing `SESSION_SECRET` invalidates all of them
+- login tokens are hmac-signed and expire after 7 days. changing `SESSION_SECRET` or the password invalidates all of them
+- a changed password is stored as a salted pbkdf2-sha256 hash (30k rounds — kept modest for the free worker cpu limit; logins are rate limited anyway)
 - the password and token checks are constant-time
 - 5 wrong passwords per ip per 15 minutes, plus a short delay on every wrong guess
 - every write re-checks the token on the server; nothing sent from the browser is trusted

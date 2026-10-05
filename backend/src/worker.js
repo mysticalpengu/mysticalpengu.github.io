@@ -1,6 +1,10 @@
 // notes backend — cloudflare worker
 // password login (owner only) · kv storage · hmac-signed bearer tokens
 //
+// the password starts as the OWNER_PASSWORD secret. once you change it from the
+// site, a salted hash is stored in kv (auth:password) and the secret is ignored.
+// to go back to the secret, delete that kv key.
+//
 // auth model: POST /auth/login with the owner password returns a signed token.
 // the site keeps the token and sends it as `Authorization: Bearer <token>`.
 // no cookies, so it works across github.io → workers.dev in every browser.
@@ -17,6 +21,12 @@ const WRITE_WINDOW = 10 * 60;         // seconds
 const LOGIN_LIMIT = 5;                // wrong passwords per window, per ip
 const LOGIN_WINDOW = 15 * 60;         // seconds
 const LOGIN_FAIL_DELAY_MS = 700;      // slows down guessing
+
+const PASSWORD_KEY = "auth:password";
+const MIN_PASSWORD = 10;
+const MAX_PASSWORD = 256;
+// modest on purpose: free workers get a tiny cpu budget, and logins are rate limited anyway
+const PBKDF2_ITERATIONS = 30000;
 
 export default {
     async fetch(request, env) {
@@ -42,6 +52,7 @@ async function route(request, env) {
 
     if (path === "/auth/login" && method === "POST") return handleLogin(request, env);
     if (path === "/auth/me" && method === "GET") return handleMe(request, env);
+    if (path === "/auth/password" && method === "POST") return handleChangePassword(request, env);
     if (path === "/auth/logout" && method === "POST") return json({ ok: true });
 
     if (path === "/notes" && method === "GET") return handleList(request, env, url);
@@ -60,7 +71,8 @@ async function route(request, env) {
 // auth
 // ---------------------------------------------------------------------------
 async function handleLogin(request, env) {
-    if (!env.OWNER_PASSWORD || !env.SESSION_SECRET) {
+    const stored = await readPasswordRecord(env);
+    if (!env.SESSION_SECRET || (!stored && !env.OWNER_PASSWORD)) {
         return json({ error: "owner login isn't set up yet" }, 503);
     }
 
@@ -70,19 +82,62 @@ async function handleLogin(request, env) {
     }
 
     const body = await readJson(request);
-    if (!body || typeof body.password !== "string" || body.password.length === 0 || body.password.length > 256) {
+    if (!body || typeof body.password !== "string" || body.password.length === 0 || body.password.length > MAX_PASSWORD) {
         return json({ error: "password required" }, 400);
     }
 
-    const ok = await safeEqual(body.password, env.OWNER_PASSWORD, env.SESSION_SECRET);
-    if (!ok) {
+    if (!(await checkPassword(body.password, stored, env))) {
         await bumpRateLimit(env, `login:${ip}`, LOGIN_WINDOW);
         await sleep(Number(env.LOGIN_FAIL_DELAY_MS ?? LOGIN_FAIL_DELAY_MS));
         return json({ error: "wrong password" }, 401);
     }
 
     const expires = nowSeconds() + TOKEN_TTL;
-    const token = await makeToken(expires, env.SESSION_SECRET);
+    const token = await makeToken(expires, env.SESSION_SECRET, versionOf(stored));
+    return json({ token, expires });
+}
+
+// change the owner password: needs a valid session AND the current password
+async function handleChangePassword(request, env) {
+    const denied = await requireOwner(request, env);
+    if (denied) return denied;
+
+    const ip = requestIp(request);
+    if (await isRateLimited(env, `login:${ip}`, LOGIN_LIMIT, LOGIN_WINDOW)) {
+        return json({ error: "too many wrong passwords, try again later" }, 429);
+    }
+
+    const body = await readJson(request);
+    const current = body && body.current;
+    const next = body && body.next;
+    if (typeof current !== "string" || typeof next !== "string" || !current) {
+        return json({ error: "current and new password required" }, 400);
+    }
+    if (next.length < MIN_PASSWORD) return json({ error: `new password must be at least ${MIN_PASSWORD} characters` }, 400);
+    if (next.length > MAX_PASSWORD) return json({ error: `new password must be under ${MAX_PASSWORD} characters` }, 400);
+    if (next === current) return json({ error: "new password must be different" }, 400);
+
+    const stored = await readPasswordRecord(env);
+    if (!(await checkPassword(current, stored, env))) {
+        await bumpRateLimit(env, `login:${ip}`, LOGIN_WINDOW);
+        await sleep(Number(env.LOGIN_FAIL_DELAY_MS ?? LOGIN_FAIL_DELAY_MS));
+        // 403, not 401: the session is fine, only the typed password was wrong
+        return json({ error: "current password is wrong" }, 403);
+    }
+
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const record = {
+        v: randomId(16),
+        salt: toBase64Url(salt),
+        hash: toBase64Url(await pbkdf2(next, salt, PBKDF2_ITERATIONS)),
+        iter: PBKDF2_ITERATIONS,
+    };
+    await env.NOTES_KV.put(PASSWORD_KEY, JSON.stringify(record));
+
+    // every older token carried the old version, so they all stop working.
+    // hand back a fresh one so this browser stays logged in.
+    const expires = nowSeconds() + TOKEN_TTL;
+    const token = await makeToken(expires, env.SESSION_SECRET, record.v);
     return json({ token, expires });
 }
 
@@ -91,8 +146,29 @@ async function handleMe(request, env) {
     return json({ authenticated: owner, owner });
 }
 
-async function makeToken(expires, secret) {
-    const sig = await sign(`owner.${expires}`, secret);
+async function readPasswordRecord(env) {
+    try {
+        const raw = await env.NOTES_KV.get(PASSWORD_KEY);
+        const record = raw ? JSON.parse(raw) : null;
+        return record && record.v && record.salt && record.hash && record.iter ? record : null;
+    } catch {
+        return null;
+    }
+}
+
+// "env" while the secret is the password, a random id once it's been changed
+const versionOf = (stored) => (stored ? stored.v : "env");
+
+async function checkPassword(candidate, stored, env) {
+    if (stored) {
+        const derived = await pbkdf2(candidate, fromBase64Url(stored.salt), stored.iter);
+        return bytesEqual(derived, fromBase64Url(stored.hash));
+    }
+    return safeEqual(candidate, env.OWNER_PASSWORD, env.SESSION_SECRET);
+}
+
+async function makeToken(expires, secret, version) {
+    const sig = await sign(`owner.${expires}.${version}`, secret);
     return `${expires}.${sig}`;
 }
 
@@ -108,7 +184,8 @@ async function isOwner(request, env) {
     if (!/^\d{1,12}$/.test(expires)) return false;
     if (parseInt(expires, 10) <= nowSeconds()) return false;
 
-    const expected = await sign(`owner.${expires}`, env.SESSION_SECRET);
+    const version = versionOf(await readPasswordRecord(env));
+    const expected = await sign(`owner.${expires}.${version}`, env.SESSION_SECRET);
     return safeEqual(sig, expected, env.SESSION_SECRET);
 }
 
@@ -298,6 +375,24 @@ async function safeEqual(a, b, secret) {
     let diff = 0;
     for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
     return diff === 0;
+}
+
+async function pbkdf2(password, salt, iterations) {
+    const key = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, key, 256);
+    return new Uint8Array(bits);
+}
+
+function bytesEqual(a, b) {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+    return diff === 0;
+}
+
+function fromBase64Url(str) {
+    const padded = str.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (str.length % 4)) % 4);
+    return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
 }
 
 function toBase64Url(bytes) {

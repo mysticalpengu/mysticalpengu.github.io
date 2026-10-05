@@ -4,7 +4,7 @@ import { initChrome } from "./common.js";
 import { renderMarkdown } from "./markdown.js";
 import { showToast, openDialog, closeDialog, isDialogOpen } from "./ui.js";
 import {
-    apiConfigured, login, logout, whoAmI,
+    apiConfigured, login, logout, whoAmI, changePassword,
     fetchPublicNotes, fetchAllNotes,
     createNote, updateNote, deleteNote,
     saveLocalDraft, loadLocalDraft, clearLocalDraft,
@@ -26,6 +26,7 @@ const els = {
     btnNew: $("btn-new-note"),
     btnDrafts: $("btn-show-drafts"),
     btnLogout: $("btn-logout"),
+    btnPassword: $("btn-password"),
     ownerLink: $("owner-link"),
 
     editor: $("editor"),
@@ -51,6 +52,15 @@ const els = {
     loginStatus: $("login-status"),
     loginSubmit: $("login-submit"),
     loginCancel: $("login-cancel"),
+
+    password: $("password"),
+    pwForm: $("password-form"),
+    pwCurrent: $("pw-current"),
+    pwNew: $("pw-new"),
+    pwRepeat: $("pw-repeat"),
+    pwStatus: $("password-status"),
+    pwSubmit: $("pw-submit"),
+    pwCancel: $("pw-cancel"),
 };
 
 init();
@@ -91,6 +101,7 @@ function handleError(err, fallback) {
     if (err && err.status === 401) {
         setOwner(false);
         if (isDialogOpen(els.editor)) closeEditor({ keepLocalDraft: true });
+        if (isDialogOpen(els.password)) closeDialog(els.password);
         showToast("session expired");
         openLogin("session expired — log in again");
         return;
@@ -144,6 +155,58 @@ async function submitLogin(e) {
         setLoginStatus(messages[err.status] || err.message || "couldn't log in", "error");
     } finally {
         els.loginSubmit.disabled = false;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// change password dialog
+// ---------------------------------------------------------------------------
+function openPassword() {
+    if (!isOwner || !els.password) return;
+    els.pwForm.reset();
+    setPasswordStatus("");
+    openDialog(els.password, els.pwCurrent);
+}
+
+function closePassword() {
+    closeDialog(els.password);
+    els.pwForm.reset();           // never leave typed passwords sitting in the fields
+}
+
+function setPasswordStatus(message, kind = "") {
+    if (!els.pwStatus) return;
+    els.pwStatus.textContent = message;
+    els.pwStatus.className = `editor__status ${kind ? `is-${kind}` : ""}`.trim();
+}
+
+async function submitPassword(e) {
+    e.preventDefault();
+    const current = els.pwCurrent.value;
+    const next = els.pwNew.value;
+    const repeat = els.pwRepeat.value;
+
+    if (!current) { setPasswordStatus("enter your current password", "error"); els.pwCurrent.focus(); return; }
+    if (next.length < 10) { setPasswordStatus("new password needs at least 10 characters", "error"); els.pwNew.focus(); return; }
+    if (next !== repeat) { setPasswordStatus("the two new passwords don't match", "error"); els.pwRepeat.focus(); return; }
+    if (next === current) { setPasswordStatus("new password must be different", "error"); els.pwNew.focus(); return; }
+
+    els.pwSubmit.disabled = true;
+    setPasswordStatus("updating...");
+    try {
+        await changePassword(current, next);
+        closePassword();
+        showToast("password updated · other devices were logged out", 3200);
+    } catch (err) {
+        if (err.status === 401) { handleError(err); return; }
+        const messages = {
+            403: "current password is wrong",
+            429: "too many wrong tries — wait a bit",
+        };
+        setPasswordStatus(messages[err.status] || err.message || "couldn't update the password", "error");
+        els.pwCurrent.value = "";
+        els.pwCurrent.focus();
+    } finally {
+        els.pwSubmit.disabled = false;
     }
 }
 
@@ -288,6 +351,13 @@ function bindControls() {
         if (e.target.closest("[data-login-close]")) closeLogin();
     });
 
+    if (els.btnPassword) els.btnPassword.addEventListener("click", () => openPassword());
+    if (els.pwForm) els.pwForm.addEventListener("submit", submitPassword);
+    if (els.pwCancel) els.pwCancel.addEventListener("click", closePassword);
+    if (els.password) els.password.addEventListener("click", (e) => {
+        if (e.target.closest("[data-password-close]")) closePassword();
+    });
+
     if (els.btnNew) els.btnNew.addEventListener("click", () => openEditor(null));
     if (els.btnDrafts) els.btnDrafts.addEventListener("click", () => {
         showingDrafts = !showingDrafts;
@@ -323,6 +393,7 @@ function bindControls() {
     document.addEventListener("keydown", (e) => {
         if (e.key !== "Escape") return;
         if (isDialogOpen(els.confirm)) closeConfirm();
+        else if (isDialogOpen(els.password)) closePassword();
         else if (isDialogOpen(els.login)) closeLogin();
         else if (isDialogOpen(els.editor)) attemptCloseEditor();
     });
