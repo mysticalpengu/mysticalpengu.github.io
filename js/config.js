@@ -21,14 +21,14 @@ const CONFIG = {
     notesApi: "https://mythicalpengu-notes.mysticalpengu.workers.dev",
 
     // minecraft server — address used for the status widget (ip or hostname[:port])
-    mcServerAddress: "YOUR_MC_SERVER_ADDRESS",
+    mcServerAddress: "play.creativefun.com",
 
     // what shows as the copy address on the mc page; defaults to mcServerAddress
-    mcServerDisplay: "",
+    mcServerDisplay: "CreativeFun",
 
     // url of pc/mc_controller.py (the start/stop panel talks to it).
     // leave as YOUR_... and the panel stays hidden
-    mcControlUrl: "play.creativefun.com",
+    mcControlUrl: "YOUR_...",
 
     devMode: false,
 };
