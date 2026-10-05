@@ -44,17 +44,6 @@ function commands() {
             },
         });
     }
-    if (isSet(CONFIG.mcServerAddress)) {
-        const address = CONFIG.mcServerDisplay || CONFIG.mcServerAddress;
-        cmds.push({
-            name: "copy mc address",
-            hint: address,
-            run: async () => {
-                const ok = await copyText(address);
-                showToast(ok ? "copied" : "couldn't copy");
-            },
-        });
-    }
     if (isSet(CONFIG.email)) {
         cmds.push({ name: "email", hint: "mailto", run: () => { window.location.href = `mailto:${CONFIG.email}`; } });
     }

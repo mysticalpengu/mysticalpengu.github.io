@@ -2,7 +2,6 @@
 // used on the landing page (tiny inline widget) and the mc page (full card).
 
 import { CONFIG } from "./config.js";
-import { copyText, showToast } from "./ui.js";
 import { minecraftPlaying } from "./playing.js";
 
 const STATUS_API = "https://api.mcstatus.io/v2/status/java/";
@@ -10,10 +9,6 @@ const REFRESH_MS = 60 * 1000;
 
 const configured = () =>
     CONFIG.mcServerAddress && !String(CONFIG.mcServerAddress).startsWith("YOUR_");
-
-function displayAddress() {
-    return CONFIG.mcServerDisplay || CONFIG.mcServerAddress || "";
-}
 
 let cache = null;          // last successful payload
 let cacheAt = 0;
@@ -127,19 +122,11 @@ export function initMcWidget() {
 }
 
 // ---------------------------------------------------------------------------
-// mc page: full status card + join address copy
+// mc page: full status card
 // ---------------------------------------------------------------------------
 export function initMcPage() {
     const card = document.getElementById("mc-card");
     if (!card) return;
-
-    const addressBtn = document.getElementById("mc-address");
-    if (addressBtn && configured()) {
-        addressBtn.addEventListener("click", async () => {
-            const ok = await copyText(displayAddress());
-            showToast(ok ? "copied" : "couldn't copy");
-        });
-    }
 
     paint({ checking: true });
     fetchStatus().then(paint);
@@ -196,7 +183,7 @@ export function initMcPage() {
         } else {
             if (dot) { dot.className = "mc-widget__dot mc-widget__dot--down"; dot.title = "offline"; }
             if (statusText) statusText.textContent = "offline";
-            if (meta) meta.textContent = "probably restarting. or i forgot to pay for it.";
+            if (meta) meta.textContent = "";
             if (motd) motd.hidden = true;
             if (playersEl) playersEl.textContent = "";
             if (versionEl) versionEl.textContent = "";

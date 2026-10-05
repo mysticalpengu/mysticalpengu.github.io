@@ -23,23 +23,12 @@ const CONFIG = {
     // minecraft server — address used for the status widget (ip or hostname[:port])
     mcServerAddress: "play.creativefun.com",
 
-    // what shows as the copy address on the mc page; defaults to mcServerAddress
-    mcServerDisplay: "CreativeFun",
-
-    // url of pc/mc_controller.py (the start/stop panel talks to it).
-    // leave as YOUR_... and the panel stays hidden
-    mcControlUrl: "YOUR_...",
-
     devMode: false,
 };
 
-// keys that are fine to leave empty / unset
-const OPTIONAL_KEYS = new Set(["mcServerDisplay", "mcControlUrl"]);
-
 function checkConfig(devMode) {
     const missing = Object.entries(CONFIG)
-        .filter(([key, value]) =>
-            !OPTIONAL_KEYS.has(key) && typeof value === "string" && value.startsWith("YOUR_"))
+        .filter(([, value]) => typeof value === "string" && value.startsWith("YOUR_"))
         .map(([key]) => key);
 
     if (missing.length === 0) return true;

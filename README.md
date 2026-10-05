@@ -6,7 +6,7 @@ personal terminal website · dark / emerald · github pages frontend + cloudflar
 website/
 ├── index.html            landing — identity, discord presence, mc status, links
 ├── about.html            about
-├── mc.html               minecraft server page + live status + start/stop panel
+├── mc.html               minecraft server page + live status
 ├── notes.html            notes (owner login with a password)
 ├── 404.html              not-found page (github pages serves it automatically)
 ├── css/style.css         design system
@@ -17,7 +17,6 @@ website/
 │   ├── about-page.js     about entry
 │   ├── mc-page.js        mc page entry
 │   ├── mc.js             mc server status (mcstatus.io)
-│   ├── mc-control.js     start/stop panel on the mc page
 │   ├── playing.js        "am i playing minecraft + what does discord say" helper
 │   ├── notes-page.js     notes entry (list, login, editor)
 │   ├── notes.js          notes api client + owner token
@@ -28,7 +27,6 @@ website/
 │   ├── ui.js             toast / clipboard / dialog focus handling
 │   └── safe-storage.js   local/session storage that never throws
 ├── assets/favicon/
-├── pc/                   mc_controller.py — runs on your pc, does the actual start/stop
 ├── backend/              cloudflare worker (see backend/README.md)
 └── test/                 markdown tests  (backend/test has the worker tests)
 ```
@@ -59,9 +57,7 @@ edit `js/config.js`:
 | `wynnpoolUrl` | set |
 | `minecraftUsername` / `minecraftUrl` | set — namemc profile |
 | `notesApi` | set — deployed worker url |
-| `mcServerAddress` | `YOUR_MC_SERVER_ADDRESS` — replace with your server hostname/ip |
-| `mcServerDisplay` | optional display address for the copy button |
-| `mcControlUrl` | `YOUR_MC_CONTROL_URL` — public https url of the pc controller (see "mc start/stop") |
+| `mcServerAddress` | set — the server the status widget watches |
 
 ## still to do (owner)
 
@@ -76,33 +72,6 @@ edit `js/config.js`:
    from then on it's stored hashed in kv and the secret is ignored (forgot it? see "forgot the password" below).
    the old discord oauth secrets aren't used any more — see `backend/README.md` to remove them
 2. **join the lanyard discord** — https://discord.gg/lanyard — makes presence live
-3. **set `mcServerAddress`** (and `mcControlUrl` for the start/stop panel)
-
-## mc start/stop
-
-the mc page has a collapsed **manage** panel (password + start / stop). it only shows once
-`mcControlUrl` is set in `js/config.js`.
-
-how it works: the site is static, so a tiny script on your pc does the real work.
-
-```
-browser → https url (tailscale funnel) → pc/mc_controller.py → java server
-```
-
-on the pc:
-
-1. copy `pc/mc_controller.py` somewhere, put a long random password in `password.txt` next to it
-2. edit `SERVER_DIR` / `START_CMD` at the top of the script
-3. run it at login with task scheduler (`pythonw.exe mc_controller.py`)
-4. install tailscale, then `tailscale funnel --bg 8765` → gives you the public https url
-5. put that url in `mcControlUrl`, set `mcServerAddress`, commit + push
-
-notes:
-
-- this password is separate from the notes login. the funnel url is public, so it's the only gate — make it long. 5 wrong tries locks it for 5 minutes
-- cors is locked to `https://mysticalpengu.github.io` in the script
-- `/status` is public, `/start` and `/stop` need the `X-Password` header
-- the pc has to be on. if it isn't, the panel says so
 
 ## discord presence
 
@@ -112,7 +81,7 @@ shows: status dot, custom status, activity ("playing minecraft · 42m", spotify 
 
 ## mc status
 
-homepage widget + `/mc` page both use https://mcstatus.io (public api, no key).
+homepage widget + `/mc` page both use https://mcstatus.io (public api, no key) to show the status of `mcServerAddress`.
 the homepage widget switches to "playing now · …" while discord says you're in minecraft, using the
 status lines discord already shows (see `js/playing.js`). discord only knows the server if your game or
 launcher puts it in the status, otherwise it just says "playing minecraft now".
@@ -128,7 +97,6 @@ always shows offline, that's the server blocking it, not the site.
 | mc server status | mcstatus.io (public api) |
 | notes storage + login + owner check | cloudflare worker + kv |
 | owner password + token signing secret | worker secrets only |
-| mc start/stop | your pc (`pc/mc_controller.py`) |
 
 ## owner workflow
 

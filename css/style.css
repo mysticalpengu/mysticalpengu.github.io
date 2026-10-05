@@ -362,45 +362,6 @@ button { font: inherit; color: inherit; }
 
 .mc-card__meta-note { color: var(--text-faint); font-style: italic; }
 
-.mc-card__join {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 14px;
-    font-size: 13px;
-    color: var(--text-faint);
-}
-
-.mc-card__join .btn { font-family: var(--font-mono); }
-
-/* start / stop controls (mc page) */
-.mc-control {
-    margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px solid var(--border);
-    font-size: 13px;
-}
-.mc-control__summary {
-    cursor: pointer;
-    color: var(--text-faint);
-    list-style: none;
-    width: fit-content;
-    transition: color var(--t-fast);
-}
-.mc-control__summary::-webkit-details-marker { display: none; }
-.mc-control__summary::before { content: "+ "; color: var(--emerald); }
-.mc-control[open] > .mc-control__summary::before { content: "\2212  "; }
-.mc-control__summary:hover { color: var(--text-muted); }
-.mc-control__row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-}
-.mc-control__pass { flex: 1 1 160px; width: auto; }
-.mc-control__state { margin: 10px 0 0; min-height: 1.3em; color: var(--text-muted); }
-
 /* --------------------------------------------------------------------------
    7c. page heads + prose (about / mc pages)
    -------------------------------------------------------------------------- */
