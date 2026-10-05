@@ -28,7 +28,7 @@ const CONFIG = {
 
     // url of pc/mc_controller.py (the start/stop panel talks to it).
     // leave as YOUR_... and the panel stays hidden
-    mcControlUrl: "YOUR_MC_CONTROL_URL",
+    mcControlUrl: "play.creativefun.com",
 
     devMode: false,
 };
