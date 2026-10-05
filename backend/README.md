@@ -1,14 +1,13 @@
 # backend
 
-notes api — cloudflare worker + kv · discord oauth · owner-only writes
+notes api — cloudflare worker + kv · owner password login · owner-only writes
 
 ## endpoints
 
 ```
-GET    /auth/login        → discord oauth (redirect param supported)
-GET    /auth/callback     → oauth callback, sets session cookie
-GET    /auth/me           → { authenticated, owner }
-POST   /auth/logout       → clears session
+POST   /auth/login        { password } → { token, expires }
+GET    /auth/me           → { authenticated, owner }   (send the token, see below)
+POST   /auth/logout       → { ok }                     (the site just forgets the token)
 GET    /notes             → published notes (public)
 GET    /notes?all=1       → all notes incl. drafts (owner only)
 POST   /notes             → create (owner only)
@@ -16,64 +15,60 @@ PATCH  /notes/:id         → update / publish / unpublish (owner only)
 DELETE /notes/:id         → delete (owner only)
 ```
 
+owner requests send `Authorization: Bearer <token>`. there are no cookies, so
+login works from github.io on every browser.
+
 ## setup
 
 ```bash
 npm install -g wrangler
 wrangler login
-wrangler kv namespace create NOTES_KV
+wrangler kv namespace create NOTES_KV     # only if you don't have one yet
 ```
 
-put the namespace id in `wrangler.toml`.
-
-secrets:
+put the namespace id in `wrangler.toml`, then set the two secrets:
 
 ```bash
-wrangler secret put DISCORD_CLIENT_ID
-wrangler secret put DISCORD_CLIENT_SECRET
-wrangler secret put OWNER_DISCORD_ID      # 1497173080131371048
-wrangler secret put SESSION_SECRET        # long random string, e.g. `openssl rand -hex 32`
-```
-
-deploy:
-
-```bash
+wrangler secret put OWNER_PASSWORD        # a long passphrase, 16+ characters
+wrangler secret put SESSION_SECRET        # e.g. output of: openssl rand -hex 32
 wrangler deploy
 ```
 
-## discord oauth app
+if you used the old discord login, these are no longer needed and can go:
 
-1. https://discord.com/developers/applications → new application
-2. oauth2 → add redirect: `https://<worker-host>/auth/callback`
-3. copy client id + client secret into the secrets above
-4. the app must request only the `identify` scope
+```bash
+wrangler secret delete DISCORD_CLIENT_ID
+wrangler secret delete DISCORD_CLIENT_SECRET
+wrangler secret delete OWNER_DISCORD_ID
+```
 
 ## configuration
 
 | var | where | value |
 |---|---|---|
-| `ALLOWED_ORIGIN` | wrangler.toml `[vars]` | github pages url, e.g. `https://mythicalpengu.github.io` |
-| `REDIRECT_URI` | wrangler.toml `[vars]` | `https://<worker-host>/auth/callback` |
-| `DISCORD_CLIENT_ID` | secret | discord app client id |
-| `DISCORD_CLIENT_SECRET` | secret | discord app client secret |
-| `OWNER_DISCORD_ID` | secret | `1497173080131371048` |
+| `ALLOWED_ORIGIN` | wrangler.toml `[vars]` | `https://mysticalpengu.github.io` (comma-separate to allow more) |
+| `OWNER_PASSWORD` | secret | your login password |
 | `SESSION_SECRET` | secret | random 32+ byte string |
 
 ## security
 
-- sessions are hmac-signed, `HttpOnly` `Secure` `SameSite=Lax` cookies — no tokens in js
-- the callback verifies the discord user id against `OWNER_DISCORD_ID` server-side; nothing sent from the browser is trusted
-- all writes re-verify the session + owner match on every request
+- login tokens are hmac-signed and expire after 7 days. changing `SESSION_SECRET` invalidates all of them
+- the password and token checks are constant-time
+- 5 wrong passwords per ip per 15 minutes, plus a short delay on every wrong guess
+- every write re-checks the token on the server; nothing sent from the browser is trusted
 - drafts are never returned by the public `GET /notes`
-- cors is locked to `ALLOWED_ORIGIN` — no wildcard
-- writes are rate-limited per ip via kv
-- input limits: title ≤ 120 chars, body ≤ 20000 chars, ≤ 5 tags (30 chars each)
-- frontend rendering escapes all html before markdown formatting
+- cors only echoes origins listed in `ALLOWED_ORIGIN` — no wildcard
+- writes are rate-limited per ip; input is length- and shape-validated (title ≤ 120, body ≤ 20000, ≤ 5 tags, real dates only)
+
+the token lives in the browser's local storage. that's fine here because the site has no
+third-party scripts and notes are html-escaped before rendering — but it's why the password should be long.
 
 ## testing
 
+no wrangler needed, the tests run the worker in plain node with an in-memory kv:
+
 ```bash
-wrangler dev
+node --test backend/test/worker.test.mjs
 ```
 
-`GET /notes` returns `{ "notes": [] }` on a fresh namespace.
+or run it for real with `wrangler dev` (put `OWNER_PASSWORD=...` and `SESSION_SECRET=...` in `backend/.dev.vars`).

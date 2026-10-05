@@ -1,8 +1,8 @@
-// mc.js — minecraft server status via the mcsrvstat.us api.
+// mc.js — minecraft server status via the mcstatus.io api.
 // used on the landing page (tiny inline widget) and the mc page (full card).
 
 import { CONFIG } from "./config.js";
-import { copyText, showToast, escapeHtml } from "./ui.js";
+import { copyText, showToast } from "./ui.js";
 
 const STATUS_API = "https://api.mcstatus.io/v2/status/java/";
 const REFRESH_MS = 60 * 1000;
@@ -30,7 +30,9 @@ export async function fetchStatus() {
 
     inflight = (async () => {
         try {
-            const res = await fetch(`${STATUS_API}${encodeURIComponent(CONFIG.mcServerAddress)}`);
+            const res = await fetch(`${STATUS_API}${encodeURIComponent(CONFIG.mcServerAddress)}`, {
+                signal: AbortSignal.timeout(8000),
+            });
             if (!res.ok) throw new Error(`status ${res.status}`);
             const data = await res.json();
             // normalize mcstatus.io v2 shape into what the widgets expect
@@ -168,7 +170,7 @@ export function initMcPage() {
                 versionEl.textContent = v ? `running ${v}` : "";
             }
             if (motd) {
-                // motd arrives as raw minecraft formatting text — strip § codes
+                // mcstatus.io already strips the § formatting codes into motd.clean
                 const clean = (state.motd && state.motd.clean && state.motd.clean.join(" ")) || "";
                 motd.textContent = clean ? `"${clean.trim()}"` : "";
                 motd.hidden = !clean;

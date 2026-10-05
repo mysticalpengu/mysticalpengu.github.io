@@ -7,14 +7,11 @@ binding = "NOTES_KV"
 id = "78535462ce8742d5b1750be87fe463fe"
 
 [vars]
-# public origin of the website (github pages url, no trailing slash)
+# origins allowed to call the api (no trailing slash). comma-separate to add more,
+# e.g. "https://mysticalpengu.github.io,http://localhost:8080" for local dev
 ALLOWED_ORIGIN = "https://mysticalpengu.github.io"
 
-# oauth redirect uri — must match the discord app settings exactly
-REDIRECT_URI = "https://mythicalpengu-notes.mysticalpengu.workers.dev/auth/callback"
-
-# secrets (set with `wrangler secret put`):
-#   DISCORD_CLIENT_ID
-#   DISCORD_CLIENT_SECRET
-#   OWNER_DISCORD_ID  = 1497173080131371048
-#   SESSION_SECRET
+# secrets (set with `wrangler secret put <NAME>`, never commit them):
+#   OWNER_PASSWORD   the password you log in with — long passphrase, 16+ characters
+#   SESSION_SECRET   random string that signs login tokens, e.g. `openssl rand -hex 32`
+#                    (changing it logs everyone out)

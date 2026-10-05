@@ -5,11 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0a0f0d">
     <meta name="description" content="mc — the minecraft server">
+    <meta name="color-scheme" content="dark">
+    <link rel="canonical" href="https://mysticalpengu.github.io/mc.html">
+    <meta property="og:site_name" content="~/mythicalpengu">
+    <meta property="og:url" content="https://mysticalpengu.github.io/mc.html">
+    <meta property="og:title" content="~/mc">
+    <meta property="og:description" content="mc — the minecraft server">
+    <meta property="og:type" content="website">
     <title>~/mc</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon/favicon.svg">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body data-page="mc">
+
+    <a class="skip-link" href="#main">skip to content</a>
 
     <div class="ambient" aria-hidden="true"></div>
 
@@ -53,6 +62,19 @@
                         <span id="mc-address-text">—</span>
                     </button>
                 </div>
+
+                <details class="mc-control" id="mc-control" hidden>
+                    <summary class="mc-control__summary">manage</summary>
+                    <div class="mc-control__row">
+                        <input class="field__input mc-control__pass" id="mc-control-pass" type="password"
+                               placeholder="password" autocomplete="current-password" aria-label="control password">
+                        <button type="button" class="btn" id="mc-start">start</button>
+                        <button type="button" class="btn btn--danger" id="mc-stop">stop</button>
+                    </div>
+                    <p class="mc-control__state" id="mc-control-state" role="status"></p>
+                </details>
+            </section>
+
         </main>
 
         <footer class="footer">
@@ -63,6 +85,8 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <noscript><p class="noscript">most of this site needs javascript to run.</p></noscript>
 
     <script type="module" src="js/mc-page.js"></script>
 </body>

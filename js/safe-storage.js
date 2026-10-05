@@ -1,48 +1,58 @@
-// safeStorage — localStorage that never throws
-// some browsers (private mode, strict settings) deny localStorage entirely.
-// the site must keep working when it does.
+// safe-storage.js — web storage that never throws.
+// some browsers (private mode, strict settings) deny storage entirely.
+// the site must keep working when that happens, so everything falls back to memory.
 
-const memory = new Map();
-let available = null;
+function makeSafe(kind) {
+    const memory = new Map();
+    let available = null;
 
-function detect() {
-    if (available !== null) return available;
-    try {
-        const probe = "__probe__";
-        window.localStorage.setItem(probe, "1");
-        window.localStorage.removeItem(probe);
-        available = true;
-    } catch {
-        available = false;
+    const store = () => window[kind];
+
+    function detect() {
+        if (available !== null) return available;
+        try {
+            const probe = "__probe__";
+            store().setItem(probe, "1");
+            store().removeItem(probe);
+            available = true;
+        } catch {
+            available = false;
+        }
+        return available;
     }
-    return available;
+
+    return {
+        get(key) {
+            try {
+                if (detect()) return store().getItem(key);
+            } catch { /* fall through */ }
+            return memory.has(key) ? memory.get(key) : null;
+        },
+
+        set(key, value) {
+            try {
+                if (detect()) {
+                    store().setItem(key, value);
+                    return;
+                }
+            } catch { /* fall through */ }
+            memory.set(key, value);
+        },
+
+        remove(key) {
+            try {
+                if (detect()) {
+                    store().removeItem(key);
+                    return;
+                }
+            } catch { /* fall through */ }
+            memory.delete(key);
+        },
+    };
 }
 
-export const safeStorage = {
-    get(key) {
-        try {
-            if (detect()) return window.localStorage.getItem(key);
-        } catch { /* fall through */ }
-        return memory.has(key) ? memory.get(key) : null;
-    },
+// survives closing the tab (login token, editor draft)
+export const safeStorage = makeSafe("localStorage");
 
-    set(key, value) {
-        try {
-            if (detect()) {
-                window.localStorage.setItem(key, value);
-                return;
-            }
-        } catch { /* fall through */ }
-        memory.set(key, value);
-    },
-
-    remove(key) {
-        try {
-            if (detect()) {
-                window.localStorage.removeItem(key);
-                return;
-            }
-        } catch { /* fall through */ }
-        memory.delete(key);
-    },
-};
+// gone when the tab closes (boot animation "seen" flag)
+export const safeSession = makeSafe("sessionStorage");

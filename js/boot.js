@@ -4,14 +4,15 @@
 // plays once per browsing session; skippable with any key/click;
 // replayable via the command palette (?boot=1).
 
-import { safeStorage } from "./safe-storage.js";
+import { CONFIG } from "./config.js";
+import { safeSession } from "./safe-storage.js";
 
 const BOOT_STORAGE_KEY = "boot:seen";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const USER = "pengu";
-const HOST = "mythicalpengu.github.io";
+const HOST = CONFIG.siteHost || window.location.hostname || "localhost";
 
 // the script. ops:
 //   prompt            → new line, colored "user@host:~$ " ready for typing
@@ -25,7 +26,7 @@ function buildScript() {
     return [
         P,
         { t: "type", text: `ssh ${USER}@${HOST}`, speed: 35 },
-        { t: "say", text: "The authenticity of host 'mythicalpengu.github.io' can't be established." },
+        { t: "say", text: `The authenticity of host '${HOST}' can't be established.` },
         { t: "say", text: "ED25519 key fingerprint is SHA256:wAddLeP3nGu1sR3aLLyC00l." },
         { t: "say", text: "Are you sure you want to continue connecting (yes/no/[fingerprint])?" },
         P,
@@ -37,9 +38,9 @@ function buildScript() {
         { t: "pause", ms: 700 },
         { t: "say", text: "access granted. welcome to the iceberg." },
         P,
-        { t: "type", text: "sudo atp install mythicalpengu -y", speed: 30 },
+        { t: "type", text: "sudo atp", speed: 45 },
         { t: "pause", ms: 600 },
-        { t: "del", n: 3, speed: 40 },
+        { t: "del", n: 2, speed: 90 },
         { t: "type", text: "pt install mythicalpengu -y", speed: 30 },
         { t: "say", text: "[sudo] password for pengu:" },
         P,
@@ -56,7 +57,7 @@ function buildScript() {
         P,
         { t: "type", text: "waddle", speed: 60 },
         { t: "pause", ms: 800 },
-        { t: "say", text: "waddle on over to mysticalpengu.github.io" },
+        { t: "say", text: `waddle on over to ${HOST}` },
         { t: "pause", ms: 900 },
     ];
 }
@@ -74,16 +75,21 @@ function prefersSkip() {
         window.history.replaceState({}, "", clean ? `?${clean}` : window.location.pathname);
         return false;
     }
-    return safeStorage.get(BOOT_STORAGE_KEY) === "session";
+    return safeSession.get(BOOT_STORAGE_KEY) === "seen";
 }
 
 function markSeen() {
-    safeStorage.set(BOOT_STORAGE_KEY, "session");
+    safeSession.set(BOOT_STORAGE_KEY, "seen");
 }
 
-const sleep = (ms) => new Promise((r) => {
-    const t = setTimeout(r, ms);
-    const check = setInterval(() => { if (state.skipped) { clearTimeout(t); clearInterval(check); r(); } }, 40);
+const sleep = (ms) => new Promise((resolve) => {
+    const timer = setTimeout(done, ms);
+    const check = setInterval(() => { if (state.skipped) done(); }, 40);
+    function done() {
+        clearTimeout(timer);
+        clearInterval(check);
+        resolve();
+    }
 });
 
 const state = { skipped: false };
@@ -150,7 +156,7 @@ export async function playBoot() {
             const span = currentLine.lastElementChild;
             if (!span) return;
             for (let i = 0; i < op.n; i++) {
-                if (state.skipped) { span.textContent = span.textContent.slice(0, -op.n); break; }
+                if (state.skipped) break;
                 span.textContent = span.textContent.slice(0, -1);
                 await sleep(op.speed ?? 40);
             }
@@ -190,6 +196,9 @@ export async function playBoot() {
                 const span = document.createElement("span");
                 span.textContent = op.text;
                 currentLine.appendChild(span);
+            } else if (op.t === "del" && currentLine && currentLine.lastElementChild) {
+                const span = currentLine.lastElementChild;
+                span.textContent = span.textContent.slice(0, -op.n);
             }
         }
         await wait(700);
@@ -199,6 +208,7 @@ export async function playBoot() {
     }
 
     for (const op of script) {
+        if (state.skipped) break;
         await runOp(op);
     }
 

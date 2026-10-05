@@ -37,9 +37,6 @@ export function initPresence() {
     }
 
     setDot(dot, "offline");
-    const custom = document.getElementById("presence-custom");
-    if (custom) custom.textContent = "checking presence...";
-
     connectWebSocket(dot);
 }
 
@@ -59,9 +56,10 @@ function connectWebSocket(dot) {
         return;
     }
 
+    const socket = ws;
     const failoverTimer = setTimeout(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) return;
-        try { ws.close(); } catch { /* already closed */ }
+        if (socket.readyState === WebSocket.OPEN) return;
+        try { socket.close(); } catch { /* already closed */ }
     }, 8000);
 
     ws.addEventListener("message", (event) => {

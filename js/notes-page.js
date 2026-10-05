@@ -1,95 +1,165 @@
-// notes-page.js — notes page entry: renders public notes, owner editing.
+// notes-page.js — notes page entry: public list, owner login, owner editing.
 
-import { CONFIG, checkConfig } from "./config.js";
-import { initPalette } from "./commands.js";
+import { initChrome } from "./common.js";
 import { renderMarkdown } from "./markdown.js";
-import { escapeHtml, showToast } from "./ui.js";
+import { showToast, openDialog, closeDialog, isDialogOpen } from "./ui.js";
 import {
-    apiConfigured, loginUrl, whoAmI, logout,
+    apiConfigured, login, logout, whoAmI,
     fetchPublicNotes, fetchAllNotes,
     createNote, updateNote, deleteNote,
     saveLocalDraft, loadLocalDraft, clearLocalDraft,
 } from "./notes.js";
 
-const configured = (v) => v && !v.startsWith("YOUR_");
-const user = (CONFIG.username || "").toLowerCase() || "mythicalpengu";
-
 let isOwner = false;
 let showingDrafts = false;
 let allNotesCache = [];
 let editingId = null;       // null = new note
-let editingStatus = null;   // "draft" | "published"
 let dirty = false;
 let pendingDeleteId = null;
+let loadToken = 0;          // ignores out-of-order responses
+
+const $ = (id) => document.getElementById(id);
 
 const els = {
-    list: document.getElementById("notes-list"),
-    actions: document.getElementById("owner-actions"),
-    btnNew: document.getElementById("btn-new-note"),
-    btnDrafts: document.getElementById("btn-show-drafts"),
-    btnLogout: document.getElementById("btn-logout"),
-    editor: document.getElementById("editor"),
-    editorTitle: document.getElementById("editor-title"),
-    form: document.getElementById("editor-form"),
-    fTitle: document.getElementById("note-title"),
-    fDate: document.getElementById("note-date"),
-    fTags: document.getElementById("note-tags"),
-    fBody: document.getElementById("note-body"),
-    status: document.getElementById("editor-status"),
-    btnSave: document.getElementById("btn-save-note"),
-    btnPublish: document.getElementById("btn-publish-note"),
-    btnDelete: document.getElementById("btn-delete-note"),
-    confirm: document.getElementById("confirm"),
-    confirmDetail: document.getElementById("confirm-detail"),
-    confirmCancel: document.getElementById("confirm-cancel"),
-    confirmDelete: document.getElementById("confirm-delete"),
-    ownerLink: document.getElementById("owner-link"),
-    footerUser: document.getElementById("footer-user"),
-    footerYear: document.getElementById("footer-year"),
+    list: $("notes-list"),
+    actions: $("owner-actions"),
+    btnNew: $("btn-new-note"),
+    btnDrafts: $("btn-show-drafts"),
+    btnLogout: $("btn-logout"),
+    ownerLink: $("owner-link"),
+
+    editor: $("editor"),
+    editorTitle: $("editor-title"),
+    form: $("editor-form"),
+    fTitle: $("note-title"),
+    fDate: $("note-date"),
+    fTags: $("note-tags"),
+    fBody: $("note-body"),
+    status: $("editor-status"),
+    btnSave: $("btn-save-note"),
+    btnPublish: $("btn-publish-note"),
+    btnDelete: $("btn-delete-note"),
+
+    confirm: $("confirm"),
+    confirmDetail: $("confirm-detail"),
+    confirmCancel: $("confirm-cancel"),
+    confirmDelete: $("confirm-delete"),
+
+    login: $("login"),
+    loginForm: $("login-form"),
+    loginPass: $("login-pass"),
+    loginStatus: $("login-status"),
+    loginSubmit: $("login-submit"),
+    loginCancel: $("login-cancel"),
 };
 
 init();
 
 async function init() {
-    if (els.footerUser) els.footerUser.textContent = user;
-    if (els.footerYear) els.footerYear.textContent = new Date().getFullYear();
+    initChrome();
+    bindControls();
 
-    const pathUser = document.querySelector(".topbar__user");
-    if (pathUser) pathUser.textContent = `/${user}`;
-
-    initPalette();
-
-    if (!configured(CONFIG.notesApi) || !apiConfigured()) {
+    if (!apiConfigured()) {
         if (els.ownerLink) els.ownerLink.hidden = true;
-        renderFallback();
+        renderMessage("the notes service is sleeping.");
         return;
     }
 
-    // render the public list first; owner state upgrades the page when it arrives
+    // public list first; owner mode upgrades the page when the token checks out
     loadNotes();
     const me = await whoAmI();
-    if (me && me.owner) {
-        isOwner = true;
-        if (els.actions) els.actions.hidden = false;
-        if (els.ownerLink) els.ownerLink.hidden = true;
-        loadNotes();
-    } else if (els.ownerLink) {
-        els.ownerLink.hidden = false;
-        els.ownerLink.href = loginUrl();
-    }
+    setOwner(!!me.owner, { reload: !!me.owner });
 
-    bindOwnerControls();
+    if (!isOwner && window.location.hash === "#login") openLogin();
+}
+
+// ---------------------------------------------------------------------------
+// owner state
+// ---------------------------------------------------------------------------
+function setOwner(value, { reload = true } = {}) {
+    isOwner = value;
+    if (els.actions) els.actions.hidden = !value;
+    if (els.ownerLink) els.ownerLink.hidden = value;
+    if (!value) {
+        showingDrafts = false;
+        if (els.btnDrafts) els.btnDrafts.textContent = "drafts";
+    }
+    if (reload) loadNotes();
+}
+
+function handleError(err, fallback) {
+    if (err && err.status === 401) {
+        setOwner(false);
+        if (isDialogOpen(els.editor)) closeEditor({ keepLocalDraft: true });
+        showToast("session expired");
+        openLogin("session expired — log in again");
+        return;
+    }
+    showToast((err && err.message) || fallback);
+}
+
+// ---------------------------------------------------------------------------
+// login dialog
+// ---------------------------------------------------------------------------
+function openLogin(message = "") {
+    if (!els.login) return;
+    setLoginStatus(message, message ? "error" : "");
+    els.loginPass.value = "";
+    openDialog(els.login, els.loginPass);
+}
+
+function closeLogin() {
+    closeDialog(els.login);
+    if (window.location.hash === "#login") {
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+}
+
+function setLoginStatus(message, kind = "") {
+    if (!els.loginStatus) return;
+    els.loginStatus.textContent = message;
+    els.loginStatus.className = `editor__status ${kind ? `is-${kind}` : ""}`.trim();
+}
+
+async function submitLogin(e) {
+    e.preventDefault();
+    const password = els.loginPass.value;
+    if (!password) { setLoginStatus("enter the password", "error"); return; }
+
+    els.loginSubmit.disabled = true;
+    setLoginStatus("checking...");
+    try {
+        await login(password);
+        closeLogin();
+        setOwner(true);
+        showToast("logged in");
+    } catch (err) {
+        els.loginPass.value = "";
+        els.loginPass.focus();
+        const messages = {
+            401: "wrong password",
+            429: "too many tries — wait a bit and try again",
+            503: "owner login isn't set up on the server yet",
+        };
+        setLoginStatus(messages[err.status] || err.message || "couldn't log in", "error");
+    } finally {
+        els.loginSubmit.disabled = false;
+    }
 }
 
 // ---------------------------------------------------------------------------
 // rendering
 // ---------------------------------------------------------------------------
 async function loadNotes() {
+    const mine = ++loadToken;
     try {
         const notes = isOwner ? await fetchAllNotes() : await fetchPublicNotes();
+        if (mine !== loadToken) return;          // a newer load has started
         allNotesCache = notes;
         renderNotes(notes);
-    } catch {
+    } catch (err) {
+        if (mine !== loadToken) return;
+        if (err.status === 401) { handleError(err); return; }
         renderApiError();
     }
 }
@@ -103,15 +173,38 @@ function renderNotes(notes) {
         : notes.filter((n) => n.status === "published");
 
     if (list.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "notes__empty";
-        empty.textContent = showingDrafts ? "no drafts." : "nothing here yet.";
-        els.list.appendChild(empty);
+        renderMessage(showingDrafts ? "no drafts." : "nothing here yet.");
         return;
     }
 
-    const sorted = [...list].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-    sorted.forEach((note) => els.list.appendChild(noteCard(note)));
+    const newestFirst = (a, b) =>
+        (b.date || "").localeCompare(a.date || "") ||
+        (b.updated || "").localeCompare(a.updated || "");
+
+    [...list].sort(newestFirst).forEach((note) => els.list.appendChild(noteCard(note)));
+}
+
+function renderMessage(text) {
+    if (!els.list) return;
+    els.list.innerHTML = "";
+    const p = document.createElement("p");
+    p.className = "notes__empty";
+    p.textContent = text;
+    els.list.appendChild(p);
+}
+
+function renderApiError() {
+    if (!els.list) return;
+    renderMessage("couldn't reach the notes service.");
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "btn btn--ghost notes__retry";
+    retry.textContent = "retry";
+    retry.addEventListener("click", () => {
+        els.list.innerHTML = '<p class="notes__loading"><span class="notes__loading-text">reading /notes</span><span class="cursor" aria-hidden="true">_</span></p>';
+        loadNotes();
+    });
+    els.list.appendChild(retry);
 }
 
 function noteCard(note) {
@@ -152,23 +245,19 @@ function noteCard(note) {
 
     const body = document.createElement("div");
     body.className = "note-card__body";
-    body.innerHTML = renderMarkdown(note.body || "");
+    body.innerHTML = renderMarkdown(note.body || "");   // escaped first, see markdown.js
 
-    card.appendChild(meta);
-    card.appendChild(title);
-    card.appendChild(body);
+    card.append(meta, title, body);
 
     if (isOwner) {
         const actions = document.createElement("div");
         actions.className = "note-card__actions";
-
         actions.appendChild(actionBtn("edit", () => openEditor(note)));
         actions.appendChild(actionBtn(
             note.status === "published" ? "unpublish" : "publish",
             () => togglePublish(note)
         ));
         actions.appendChild(actionBtn("delete", () => askDelete(note), "btn--danger"));
-
         card.appendChild(actions);
     }
 
@@ -184,39 +273,20 @@ function actionBtn(label, onClick, extraClass = "") {
     return btn;
 }
 
-function renderFallback() {
-    if (!els.list) return;
-    els.list.innerHTML = "";
-    const p = document.createElement("p");
-    p.className = "notes__empty";
-    p.textContent = "the notes service is sleeping.";
-    els.list.appendChild(p);
-}
-
-function renderApiError() {
-    if (!els.list) return;
-    els.list.innerHTML = "";
-    const p = document.createElement("p");
-    p.className = "notes__empty";
-    p.textContent = "couldn't reach the notes service.";
-    const retry = document.createElement("button");
-    retry.type = "button";
-    retry.className = "btn btn--ghost";
-    retry.textContent = "retry";
-    retry.style.marginTop = "10px";
-    retry.addEventListener("click", () => {
-        els.list.innerHTML = '<p class="notes__loading">reading /notes<span class="cursor">_</span></p>';
-        loadNotes();
+// ---------------------------------------------------------------------------
+// controls (bound once; every handler checks isOwner)
+// ---------------------------------------------------------------------------
+function bindControls() {
+    if (els.ownerLink) els.ownerLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        openLogin();
     });
-    els.list.appendChild(p);
-    els.list.appendChild(retry);
-}
 
-// ---------------------------------------------------------------------------
-// owner controls
-// ---------------------------------------------------------------------------
-function bindOwnerControls() {
-    if (!isOwner) return;
+    if (els.loginForm) els.loginForm.addEventListener("submit", submitLogin);
+    if (els.loginCancel) els.loginCancel.addEventListener("click", closeLogin);
+    if (els.login) els.login.addEventListener("click", (e) => {
+        if (e.target.closest("[data-login-close]")) closeLogin();
+    });
 
     if (els.btnNew) els.btnNew.addEventListener("click", () => openEditor(null));
     if (els.btnDrafts) els.btnDrafts.addEventListener("click", () => {
@@ -224,118 +294,115 @@ function bindOwnerControls() {
         els.btnDrafts.textContent = showingDrafts ? "published" : "drafts";
         renderNotes(allNotesCache);
     });
-    if (els.btnLogout) els.btnLogout.addEventListener("click", async () => {
-        await logout();
-        window.location.reload();
+    if (els.btnLogout) els.btnLogout.addEventListener("click", () => {
+        logout();
+        setOwner(false);
+        showToast("logged out");
     });
 
-    // editor
-    if (els.editor) {
-        els.editor.addEventListener("click", (e) => {
-            if (e.target.closest("[data-editor-close]")) attemptCloseEditor();
-        });
-
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && !els.editor.hidden) attemptCloseEditor();
-        });
-    }
+    if (els.editor) els.editor.addEventListener("click", (e) => {
+        if (e.target.closest("[data-editor-close]")) attemptCloseEditor();
+    });
 
     if (els.form) {
         els.form.addEventListener("input", () => { dirty = true; });
         els.form.addEventListener("submit", (e) => { e.preventDefault(); saveNote("draft"); });
     }
-    if (els.btnSave) els.btnSave.addEventListener("click", (e) => { e.preventDefault(); saveNote("draft"); });
     if (els.btnPublish) els.btnPublish.addEventListener("click", (e) => { e.preventDefault(); saveNote("published"); });
     if (els.btnDelete) els.btnDelete.addEventListener("click", () => {
-        pendingDeleteId = editingId;
-        if (els.confirmDetail) {
-            els.confirmDetail.textContent = els.fTitle.value || "untitled";
-        }
-        if (els.confirm) els.confirm.hidden = false;
+        if (editingId) askDelete({ id: editingId, title: els.fTitle.value });
     });
 
-    // confirm dialog
-    if (els.confirmCancel) els.confirmCancel.addEventListener("click", () => {
-        if (els.confirm) els.confirm.hidden = true;
-        pendingDeleteId = null;
+    if (els.confirmCancel) els.confirmCancel.addEventListener("click", closeConfirm);
+    if (els.confirm) els.confirm.addEventListener("click", (e) => {
+        if (e.target.classList.contains("confirm__backdrop")) closeConfirm();
     });
-    if (els.confirmDelete) els.confirmDelete.addEventListener("click", async () => {
-        if (!pendingDeleteId) return;
-        els.confirmDelete.disabled = true;
-        try {
-            await deleteNote(pendingDeleteId);
-            if (els.confirm) els.confirm.hidden = true;
-            closeEditor();
-            showToast("deleted");
-            loadNotes();
-        } catch (err) {
-            showToast(err.message || "couldn't delete");
-        } finally {
-            els.confirmDelete.disabled = false;
-            pendingDeleteId = null;
-        }
+    if (els.confirmDelete) els.confirmDelete.addEventListener("click", confirmDelete);
+
+    // escape closes whatever is on top: confirm → login → editor
+    document.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        if (isDialogOpen(els.confirm)) closeConfirm();
+        else if (isDialogOpen(els.login)) closeLogin();
+        else if (isDialogOpen(els.editor)) attemptCloseEditor();
     });
 
     // warn before losing unsaved edits
     window.addEventListener("beforeunload", (e) => {
-        if (dirty && els.editor && !els.editor.hidden) {
+        if (dirty && isDialogOpen(els.editor)) {
             e.preventDefault();
             e.returnValue = "";
         }
     });
-
-    // restore a local draft if the editor was closed accidentally
-    const local = loadLocalDraft();
-    if (local && local.body) {
-        openEditor(null);
-        els.fTitle.value = local.title || "";
-        els.fBody.value = local.body || "";
-        setStatus("recovered unsaved draft from last time", "ok");
-        dirty = true;
-    }
 }
 
+// ---------------------------------------------------------------------------
+// editor
+// ---------------------------------------------------------------------------
 function openEditor(note) {
+    if (!isOwner) return;
     editingId = note ? note.id : null;
-    editingStatus = note ? note.status : "draft";
     dirty = false;
 
-    if (els.editorTitle) els.editorTitle.textContent = note ? "// edit note" : "// new note";
-    if (els.fTitle) els.fTitle.value = note ? note.title || "" : "";
-    if (els.fDate) els.fDate.value = note ? note.date || today() : today();
-    if (els.fTags) els.fTags.value = note && note.tags ? note.tags.join(", ") : "";
-    if (els.fBody) els.fBody.value = note ? note.body || "" : "";
-    if (els.btnDelete) els.btnDelete.hidden = !note;
-    if (els.btnPublish) els.btnPublish.textContent = note && note.status === "published" ? "update" : "publish";
+    els.editorTitle.textContent = note ? "// edit note" : "// new note";
+    els.fTitle.value = note ? note.title || "" : "";
+    els.fDate.value = note ? note.date || today() : today();
+    els.fTags.value = note && note.tags ? note.tags.join(", ") : "";
+    els.fBody.value = note ? note.body || "" : "";
+    els.btnDelete.hidden = !note;
+    els.btnPublish.textContent = note && note.status === "published" ? "update" : "publish";
     setStatus("");
 
-    if (els.editor) els.editor.hidden = false;
-    if (els.fTitle) els.fTitle.focus();
+    // a new note picks up whatever was left unsaved last time
+    if (!note) {
+        const local = loadLocalDraft();
+        if (local && (local.title || local.body)) {
+            els.fTitle.value = local.title || "";
+            els.fDate.value = local.date || today();
+            els.fTags.value = local.tags || "";
+            els.fBody.value = local.body || "";
+            setStatus("recovered the draft you didn't save last time", "ok");
+            dirty = true;
+        }
+    }
+
+    openDialog(els.editor, els.fTitle);
 }
 
-function closeEditor() {
-    if (!els.editor) return;
-    els.editor.hidden = true;
+function closeEditor({ keepLocalDraft = false } = {}) {
+    closeDialog(els.editor);
     editingId = null;
     dirty = false;
-    clearLocalDraft();
+    if (!keepLocalDraft) clearLocalDraft();
 }
 
 function attemptCloseEditor() {
-    if (dirty) {
-        saveLocalDraft({
-            title: els.fTitle ? els.fTitle.value : "",
-            body: els.fBody ? els.fBody.value : "",
-        });
+    if (!dirty) { closeEditor({ keepLocalDraft: true }); return; }
+
+    if (editingId) {
+        // editing an existing note: don't silently throw edits away
+        if (!window.confirm("discard your unsaved changes?")) return;
+        closeEditor();
+        return;
     }
-    closeEditor();
+
+    // new note: keep what was typed on this device (or drop it if it's empty)
+    const title = els.fTitle.value.trim();
+    const body = els.fBody.value;
+    if (title || body.trim()) {
+        saveLocalDraft({ title: els.fTitle.value, body, date: els.fDate.value, tags: els.fTags.value });
+        showToast("draft kept on this device");
+        closeEditor({ keepLocalDraft: true });
+    } else {
+        closeEditor();
+    }
 }
 
 async function saveNote(status) {
     const title = els.fTitle.value.trim();
     const body = els.fBody.value;
 
-    if (!title) { setStatus("a title is needed", "error"); return; }
+    if (!title) { setStatus("a title is needed", "error"); els.fTitle.focus(); return; }
     if (body.length > 20000) { setStatus("note is too long (20k max)", "error"); return; }
 
     const fields = {
@@ -348,25 +415,15 @@ async function saveNote(status) {
 
     setBusy(true);
     try {
-        if (editingId) {
-            await updateNote(editingId, fields);
-        } else {
-            const created = await createNote(fields);
-            editingId = created.note ? created.note.id : null;
-        }
-        dirty = false;
-        clearLocalDraft();
-        editingStatus = status;
-        setStatus(status === "published" ? "published" : "saved", "ok");
+        if (editingId) await updateNote(editingId, fields);
+        else await createNote(fields);
+
         showToast(status === "published" ? "published" : "saved");
-        closeEditor();
+        closeEditor();                // also clears the local draft
         loadNotes();
     } catch (err) {
-        if (err.status === 401) {
-            setStatus("session expired — log in again", "error");
-        } else {
-            setStatus(err.message || "couldn't save", "error");
-        }
+        if (err.status === 401) handleError(err);
+        else setStatus(err.message || "couldn't save", "error");
     } finally {
         setBusy(false);
     }
@@ -379,21 +436,50 @@ async function togglePublish(note) {
         showToast(target === "published" ? "published" : "unpublished");
         loadNotes();
     } catch (err) {
-        showToast(err.message || "couldn't update");
+        handleError(err, "couldn't update");
     }
 }
 
+// ---------------------------------------------------------------------------
+// delete
+// ---------------------------------------------------------------------------
 function askDelete(note) {
     pendingDeleteId = note.id;
-    if (els.confirmDetail) els.confirmDetail.textContent = note.title || "untitled";
-    if (els.confirm) els.confirm.hidden = false;
+    els.confirmDetail.textContent = note.title || "untitled";
+    openDialog(els.confirm, els.confirmCancel);      // cancel is the safe default
+}
+
+function closeConfirm() {
+    closeDialog(els.confirm);
+    pendingDeleteId = null;
+}
+
+async function confirmDelete() {
+    if (!pendingDeleteId) return;
+    const id = pendingDeleteId;
+    els.confirmDelete.disabled = true;
+    try {
+        await deleteNote(id);
+        closeConfirm();
+        if (isDialogOpen(els.editor)) closeEditor();
+        showToast("deleted");
+        loadNotes();
+    } catch (err) {
+        closeConfirm();
+        handleError(err, "couldn't delete");
+    } finally {
+        els.confirmDelete.disabled = false;
+    }
 }
 
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 function today() {
-    return new Date().toISOString().slice(0, 10);
+    const d = new Date();      // local date, not utc, so late evenings don't land on "tomorrow"/"yesterday"
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
 function setStatus(message, kind = "") {

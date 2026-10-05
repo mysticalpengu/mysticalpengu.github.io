@@ -8,11 +8,17 @@
     <meta property="og:title" content="~/mythicalpengu">
     <meta property="og:description" content="my personal place for things in general">
     <meta property="og:type" content="website">
+    <meta name="color-scheme" content="dark">
+    <link rel="canonical" href="https://mysticalpengu.github.io/index.html">
+    <meta property="og:site_name" content="~/mythicalpengu">
+    <meta property="og:url" content="https://mysticalpengu.github.io/index.html">
     <title>~/mythicalpengu</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon/favicon.svg">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body data-page="home">
+
+    <a class="skip-link" href="#main">skip to content</a>
 
     <!-- boot overlay: only shown when js decides to play it -->
     <div id="boot" class="boot" hidden aria-hidden="true">
@@ -60,11 +66,10 @@
             <section class="links" aria-label="links">
                 <p class="links__label">// places</p>
                 <ul class="links__list" id="links-list">
-                    <!-- populated by js; static fallback below for no-js -->
-                    <li><a class="link-cmd" href="#" id="static-link-wynnpool">wynnpool<span class="link-cmd__hint" aria-hidden="true"> ↗</span></a></li>
-                    <li><a class="link-cmd" href="#" id="static-link-minecraft">minecraft<span class="link-cmd__hint" aria-hidden="true"> ↗</span></a></li>
-                    <li><a class="link-cmd" href="#" id="static-link-discord">discord</a></li>
-                    <li><a class="link-cmd" href="#" id="static-link-email">email</a></li>
+                    <!-- rebuilt by js from config.js; plain links here for no-js -->
+                    <li><a class="link-cmd" href="https://www.wynnpool.com/stats/player/9c054573-866c-4b09-89ab-f40c936a9ebd" target="_blank" rel="noopener noreferrer">wynnpool<span class="link-cmd__hint" aria-hidden="true"> ↗</span></a></li>
+                    <li><a class="link-cmd" href="https://namemc.com/profile/mythicalpengu.2" target="_blank" rel="noopener noreferrer">minecraft<span class="link-cmd__hint" aria-hidden="true"> ↗</span></a></li>
+                    <li><a class="link-cmd" href="mailto:mythicalpengu@proton.me">email</a></li>
                 </ul>
             </section>
 
@@ -82,27 +87,16 @@
             <span class="footer__copy">© <span id="footer-user">mythicalpengu</span> <span class="footer__year" id="footer-year"></span></span>
             <span class="footer__line" id="footer-line">built with minimal brain work</span>
             <span class="footer__owner-wrap">
-                <a href="notes.html" class="footer__owner" id="owner-link" hidden>owner</a>
+                <a href="notes.html#login" class="footer__owner" id="owner-link" hidden>owner</a>
             </span>
         </footer>
 
     </div>
 
-    <!-- command palette -->
-    <div id="palette" class="palette" hidden>
-        <div class="palette__backdrop" data-palette-close></div>
-        <div class="palette__panel" role="dialog" aria-modal="true" aria-label="command palette">
-            <div class="palette__input-row">
-                <span class="palette__prompt" aria-hidden="true">&gt;</span>
-                <input id="palette-input" class="palette__input" type="text" placeholder="type a command..." autocomplete="off" spellcheck="false">
-            </div>
-            <ul class="palette__list" id="palette-list" role="listbox" aria-label="commands"></ul>
-            <div class="palette__hint">enter to run · esc to close</div>
-        </div>
-    </div>
-
     <!-- tiny toast for "copied" style confirmations -->
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <noscript><p class="noscript">most of this site needs javascript to run.</p></noscript>
 
     <script type="module" src="js/main.js"></script>
 </body>

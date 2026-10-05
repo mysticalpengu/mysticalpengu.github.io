@@ -5,27 +5,38 @@ personal terminal website · dark / emerald · github pages frontend + cloudflar
 ```
 website/
 ├── index.html            landing — identity, discord presence, mc status, links
-├── about.html            about — fill this in yourself
-├── mc.html               minecraft server page + live status
-├── notes.html            notes
+├── about.html            about
+├── mc.html               minecraft server page + live status + start/stop panel
+├── notes.html            notes (owner login with a password)
+├── 404.html              not-found page (github pages serves it automatically)
 ├── css/style.css         design system
 ├── js/
 │   ├── config.js         ★ all personal config lives here
+│   ├── common.js         shared page chrome (username, year, palette)
 │   ├── main.js           landing entry
 │   ├── about-page.js     about entry
 │   ├── mc-page.js        mc page entry
 │   ├── mc.js             mc server status (mcstatus.io)
-│   ├── notes-page.js     notes entry
+│   ├── mc-control.js     start/stop panel on the mc page
+│   ├── notes-page.js     notes entry (list, login, editor)
+│   ├── notes.js          notes api client + owner token
 │   ├── boot.js           boot sequence (ssh + apt install story)
 │   ├── presence.js       discord presence (lanyard)
-│   ├── notes.js          notes api client
-│   ├── commands.js       command palette (ctrl+k)
+│   ├── commands.js       command palette (ctrl+k, every page)
 │   ├── markdown.js       safe markdown renderer
-│   ├── ui.js             toast / clipboard
-│   └── safe-storage.js   localStorage fallback
+│   ├── ui.js             toast / clipboard / dialog focus handling
+│   └── safe-storage.js   local/session storage that never throws
 ├── assets/favicon/
-└── backend/              cloudflare worker (see backend/README.md)
+├── pc/                   mc_controller.py — runs on your pc, does the actual start/stop
+├── backend/              cloudflare worker (see backend/README.md)
+└── test/                 markdown tests  (backend/test has the worker tests)
 ```
+
+## where to edit what
+
+- **page text** (greeting, title, description, footer lines, about) → the `.html` files. `config.js` no longer overrides them
+- **links, discord id, email, server address** → `js/config.js`
+- **look and feel** → `css/style.css`
 
 ## live urls
 
@@ -33,7 +44,6 @@ website/
 |---|---|
 | site | https://mysticalpengu.github.io |
 | notes api | https://mythicalpengu-notes.mysticalpengu.workers.dev |
-| oauth callback | https://mythicalpengu-notes.mysticalpengu.workers.dev/auth/callback |
 
 ## configuration
 
@@ -42,38 +52,54 @@ edit `js/config.js`:
 | key | status |
 |---|---|
 | `username` | set — `mythicalpengu` |
-| `discordUserId` | set — `1497173080131371048` |
-| `discordUsername` | set — `mythicalpengu` |
-| `title` / `description` | set |
-| `email` | set — `mythicalpengu@proton.me` |
+| `siteHost` | set — `mysticalpengu.github.io` (used by the boot animation) |
+| `discordUserId` / `discordUsername` | set |
+| `email` | set |
 | `wynnpoolUrl` | set |
 | `minecraftUsername` / `minecraftUrl` | set — namemc profile |
 | `notesApi` | set — deployed worker url |
-| `mcServerAddress` | `YOUR_MC_SERVER_ADDRESS` — replace with your server ip/hostname |
+| `mcServerAddress` | `YOUR_MC_SERVER_ADDRESS` — replace with your server hostname/ip |
 | `mcServerDisplay` | optional display address for the copy button |
+| `mcControlUrl` | `YOUR_MC_CONTROL_URL` — public https url of the pc controller (see "mc start/stop") |
 
 ## still to do (owner)
 
-1. **discord oauth app** — https://discord.com/developers/applications → new app →
-   oauth2 → add redirect `https://mythicalpengu-notes.mysticalpengu.workers.dev/auth/callback` →
-   give me (or set yourself) the client id + secret:
+1. **set the login secrets and redeploy the worker** (once) — the notes login is a password now:
    ```bash
    cd backend
-   wrangler secret put DISCORD_CLIENT_ID
-   wrangler secret put DISCORD_CLIENT_SECRET
+   wrangler secret put OWNER_PASSWORD     # a long passphrase, 16+ characters
+   wrangler secret put SESSION_SECRET     # e.g. output of: openssl rand -hex 32
+   wrangler deploy
    ```
+   the old discord oauth secrets aren't used any more — see `backend/README.md` to remove them
 2. **join the lanyard discord** — https://discord.gg/lanyard — makes presence live
-3. **set `mcServerAddress`** — your minecraft server address (widget hides until set)
-4. **fill in `about.html`** — yours to write
+3. **set `mcServerAddress`** (and `mcControlUrl` for the start/stop panel)
 
-## backend
+## mc start/stop
 
-see [backend/README.md](backend/README.md). already deployed. to redeploy after changes:
+the mc page has a collapsed **manage** panel (password + start / stop). it only shows once
+`mcControlUrl` is set in `js/config.js`.
 
-```bash
-cd backend
-wrangler deploy
+how it works: the site is static, so a tiny script on your pc does the real work.
+
 ```
+browser → https url (tailscale funnel) → pc/mc_controller.py → java server
+```
+
+on the pc:
+
+1. copy `pc/mc_controller.py` somewhere, put a long random password in `password.txt` next to it
+2. edit `SERVER_DIR` / `START_CMD` at the top of the script
+3. run it at login with task scheduler (`pythonw.exe mc_controller.py`)
+4. install tailscale, then `tailscale funnel --bg 8765` → gives you the public https url
+5. put that url in `mcControlUrl`, set `mcServerAddress`, commit + push
+
+notes:
+
+- this password is separate from the notes login. the funnel url is public, so it's the only gate — make it long. 5 wrong tries locks it for 5 minutes
+- cors is locked to `https://mysticalpengu.github.io` in the script
+- `/status` is public, `/start` and `/stop` need the `X-Password` header
+- the pc has to be on. if it isn't, the panel says so
 
 ## discord presence
 
@@ -94,30 +120,41 @@ always shows offline, that's the server blocking it, not the site.
 | pages, boot, palette, links | github pages (static) |
 | discord presence | lanyard (public api) |
 | mc server status | mcstatus.io (public api) |
-| notes storage + auth + owner check | cloudflare worker + kv |
-| oauth client secret, session secret, owner id | worker secrets only |
+| notes storage + login + owner check | cloudflare worker + kv |
+| owner password + token signing secret | worker secrets only |
+| mc start/stop | your pc (`pc/mc_controller.py`) |
 
 ## owner workflow
 
-1. footer → `owner` → discord oauth login
+1. footer → `owner` (or ctrl+k → `owner login`) → type the password
 2. notes page → `+ new note` / edit / publish / unpublish / delete
-3. drafts are server-side, never public
-4. delete asks for confirmation
+3. drafts live on the server and are never public; an unsaved *new* note is kept on your device if you close the editor
+4. delete asks for confirmation; `log out` forgets the token on this device
 
 ## security model
 
 - frontend js contains no secrets — everything in `js/` is public
-- auth: discord oauth → backend verifies discord user id == owner id → signed
-  HttpOnly Secure SameSite=Lax session cookie
-- authorization: every write request re-verifies session + owner server-side
+- auth: password → worker checks it in constant time → returns an hmac-signed token (7 days).
+  the site keeps it in local storage and sends it as a bearer header. no cookies
+- 5 wrong passwords per ip per 15 minutes, plus a short delay on each wrong guess
+- authorization: every write re-verifies the token server-side
 - notes markdown is html-escaped before rendering; links restricted to http(s)/mailto
-- cors locked to `ALLOWED_ORIGIN`; writes rate-limited; input length-validated
+- cors only allows the origins in `ALLOWED_ORIGIN`; writes rate-limited; input validated
 
 ## local development
 
 ```bash
 cd backend && wrangler dev        # notes api on http://localhost:8787
 python -m http.server 8080        # frontend on http://localhost:8080
+```
+
+for local dev put `ALLOWED_ORIGIN = "https://mysticalpengu.github.io,http://localhost:8080"`
+in `backend/wrangler.toml`, and your two secrets in `backend/.dev.vars`.
+
+## tests
+
+```bash
+node --test test/markdown.test.mjs backend/test/worker.test.mjs
 ```
 
 ## deploy updates
@@ -133,7 +170,8 @@ git add -A && git commit -m "update" && git push
 |---|---|
 | presence stuck offline | not in the lanyard server, or discord id wrong |
 | `couldn't reach the notes service` | worker down, or `notesApi` wrong |
-| login bounces back with no session | oauth redirect uri mismatch in discord app settings |
-| `auth=not_owner` in url | logged-in discord account ≠ `OWNER_DISCORD_ID` |
+| `owner login isn't set up on the server yet` | `OWNER_PASSWORD` / `SESSION_SECRET` not set — see "still to do" |
+| `too many tries` on login | 5 wrong passwords from your ip; wait 15 minutes |
+| logged out on every visit | browser blocks local storage (private mode) — the token only lives for the tab then |
 | mc server shows offline | server actually offline, or it blocks status pings (hypixel does) |
 | boot never replays | plays once per session — palette → `replay boot`, or `index.html?boot=1` |
