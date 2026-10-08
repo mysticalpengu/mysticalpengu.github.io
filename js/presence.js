@@ -247,7 +247,7 @@ function formatElapsed(ms) {
     const minutes = totalMinutes % 60;
     if (hours > 0) return `${hours}h ${minutes}m`;
     if (minutes >= 1) return `${minutes}m`;
-    return "moments";
+    return "just started";
 }
 
 setInterval(tickElapsed, 30 * 1000);

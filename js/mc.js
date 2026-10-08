@@ -27,7 +27,7 @@ export async function fetchStatus() {
     inflight = (async () => {
         try {
             const res = await fetch(`${STATUS_API}${encodeURIComponent(CONFIG.mcServerAddress)}`, {
-                signal: AbortSignal.timeout(8000),
+                signal: AbortSignal.timeout?.(8000),
             });
             if (!res.ok) throw new Error(`status ${res.status}`);
             const data = await res.json();
@@ -157,6 +157,9 @@ export function initMcPage() {
             if (dot) dot.className = "mc-widget__dot mc-widget__dot--down";
             if (statusText) statusText.textContent = "status unknown";
             if (meta) meta.textContent = "couldn't reach the status api";
+            if (motd) motd.hidden = true;
+            if (playersEl) playersEl.textContent = "";
+            if (versionEl) versionEl.textContent = "";
             return;
         }
 

@@ -72,6 +72,12 @@ async function request(path, options = {}, { auth = false } = {}) {
             timeout.status = 0;
             throw timeout;
         }
+        if (err instanceof TypeError) {
+            // fetch() throws TypeError when the network or cors blocks the request
+            const offline = new Error("couldn't reach the notes service");
+            offline.status = 0;
+            throw offline;
+        }
         throw err;
     } finally {
         clearTimeout(timer);

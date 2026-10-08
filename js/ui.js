@@ -48,8 +48,11 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), texta
 
 export function openDialog(el, focusTarget) {
     if (!el) return;
-    dialogStack.push({ el, previous: document.activeElement });
+    if (!dialogStack.some((d) => d.el === el)) {
+        dialogStack.push({ el, previous: document.activeElement });
+    }
     el.hidden = false;
+    syncScrollLock();
     if (focusTarget) focusTarget.focus();
 }
 
@@ -57,9 +60,14 @@ export function closeDialog(el) {
     if (!el) return;
     el.hidden = true;
     const index = dialogStack.findIndex((d) => d.el === el);
-    if (index === -1) return;
+    if (index === -1) { syncScrollLock(); return; }
     const [{ previous }] = dialogStack.splice(index, 1);
+    syncScrollLock();
     if (previous && previous.isConnected && typeof previous.focus === "function") previous.focus();
+}
+
+function syncScrollLock() {
+    document.body.classList.toggle("has-dialog", dialogStack.length > 0);
 }
 
 export function isDialogOpen(el) {

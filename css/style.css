@@ -146,7 +146,7 @@ button { font: inherit; color: inherit; }
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    max-width: calc(var(--content-w) + var(--pad-x) * 2);
+    max-width: calc(var(--content-w-wide) + var(--pad-x) * 2);
     margin: 0 auto;
     padding: 0 var(--pad-x);
 }
@@ -181,6 +181,8 @@ button { font: inherit; color: inherit; }
     align-items: center;
     justify-content: space-between;
     padding: 18px 0 0;
+    flex-wrap: wrap;
+    gap: 6px 16px;
 }
 
 .topbar__path {
@@ -590,7 +592,6 @@ button { font: inherit; color: inherit; }
 .note-card__date { font-variant-numeric: tabular-nums; }
 
 .note-card__tag {
-    color: var(--emerald-dim);
     color: rgba(52, 211, 153, 0.65);
     font-size: 11px;
 }
@@ -861,7 +862,7 @@ input[type="date"].field__input { color-scheme: dark; }
     font-size: 13px;
     padding: 7px 16px;
     border-radius: var(--radius-s);
-    animation: rise-in var(--t-fast) ease both;
+    animation: toast-in var(--t-fast) ease both;
 }
 
 .cursor {
@@ -950,8 +951,6 @@ input[type="date"].field__input { color-scheme: dark; }
 
     .main { gap: 30px; padding: 36px 0; }
 
-    .presence-card { max-width: none; }
-
     .editor__row { grid-template-columns: 1fr; }
 
     .footer { gap: 8px; }
@@ -982,4 +981,21 @@ input[type="date"].field__input { color-scheme: dark; }
     .cursor { animation: none; }
     .main > * { animation: none; }
     .boot::after { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   19. polish
+   -------------------------------------------------------------------------- */
+html { scrollbar-gutter: stable; }
+body.has-dialog { overflow: hidden; }
+
+@supports (min-height: 100dvh) {
+    body, .shell { min-height: 100dvh; }
+}
+
+.note-card__title, .note-card__body, .prose { overflow-wrap: anywhere; }
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translate(-50%, 4px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
 }

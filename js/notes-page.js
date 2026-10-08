@@ -14,6 +14,7 @@ let isOwner = false;
 let showingDrafts = false;
 let allNotesCache = [];
 let editingId = null;       // null = new note
+let editingStatus = "draft"; // status the note being edited already has
 let dirty = false;
 let pendingDeleteId = null;
 let loadToken = 0;          // ignores out-of-order responses
@@ -100,8 +101,14 @@ function setOwner(value, { reload = true } = {}) {
 function handleError(err, fallback) {
     if (err && err.status === 401) {
         setOwner(false);
-        if (isDialogOpen(els.editor)) closeEditor({ keepLocalDraft: true });
-        if (isDialogOpen(els.password)) closeDialog(els.password);
+        if (isDialogOpen(els.editor)) {
+            // a new note that was being written stays on this device instead of vanishing
+            if (!editingId && (els.fTitle.value.trim() || els.fBody.value.trim())) {
+                saveLocalDraft({ title: els.fTitle.value, body: els.fBody.value, date: els.fDate.value, tags: els.fTags.value });
+            }
+            closeEditor({ keepLocalDraft: true });
+        }
+        if (isDialogOpen(els.password)) closePassword();
         showToast("session expired");
         openLogin("session expired — log in again");
         return;
@@ -376,7 +383,7 @@ function bindControls() {
 
     if (els.form) {
         els.form.addEventListener("input", () => { dirty = true; });
-        els.form.addEventListener("submit", (e) => { e.preventDefault(); saveNote("draft"); });
+        els.form.addEventListener("submit", (e) => { e.preventDefault(); saveNote(editingStatus === "published" ? "published" : "draft"); });
     }
     if (els.btnPublish) els.btnPublish.addEventListener("click", (e) => { e.preventDefault(); saveNote("published"); });
     if (els.btnDelete) els.btnDelete.addEventListener("click", () => {
@@ -398,6 +405,11 @@ function bindControls() {
         else if (isDialogOpen(els.editor)) attemptCloseEditor();
     });
 
+    // ctrl+k → "owner login" while already on this page only changes the hash
+    window.addEventListener("hashchange", () => {
+        if (window.location.hash === "#login" && !isOwner && !isDialogOpen(els.login)) openLogin();
+    });
+
     // warn before losing unsaved edits
     window.addEventListener("beforeunload", (e) => {
         if (dirty && isDialogOpen(els.editor)) {
@@ -413,6 +425,7 @@ function bindControls() {
 function openEditor(note) {
     if (!isOwner) return;
     editingId = note ? note.id : null;
+    editingStatus = note ? note.status : "draft";
     dirty = false;
 
     els.editorTitle.textContent = note ? "// edit note" : "// new note";
@@ -422,6 +435,7 @@ function openEditor(note) {
     els.fBody.value = note ? note.body || "" : "";
     els.btnDelete.hidden = !note;
     els.btnPublish.textContent = note && note.status === "published" ? "update" : "publish";
+    els.btnSave.hidden = editingStatus === "published";
     setStatus("");
 
     // a new note picks up whatever was left unsaved last time
@@ -442,9 +456,11 @@ function openEditor(note) {
 
 function closeEditor({ keepLocalDraft = false } = {}) {
     closeDialog(els.editor);
+    // only a new note owns the on-device draft; closing an edit of an existing note must not touch it
+    if (!keepLocalDraft && !editingId) clearLocalDraft();
     editingId = null;
+    editingStatus = "draft";
     dirty = false;
-    if (!keepLocalDraft) clearLocalDraft();
 }
 
 function attemptCloseEditor() {
