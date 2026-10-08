@@ -9,7 +9,7 @@ id = "78535462ce8742d5b1750be87fe463fe"
 [vars]
 # origins allowed to call the api (no trailing slash). comma-separate to add more,
 # e.g. "https://mysticalpengu.github.io,http://localhost:8080" for local dev
-ALLOWED_ORIGIN = "https://mysticalpengu.github.io,https://mythicalpengu.is-a.dev"
+ALLOWED_ORIGIN = "https://mysticalpengu.github.io,https://mythicalpengu.is-a.dev,https://mythicalpengu.is-not.cool"
 
 # secrets (set with `wrangler secret put <NAME>`, never commit them):
 #   OWNER_PASSWORD   the password you log in with — long passphrase, 16+ characters
