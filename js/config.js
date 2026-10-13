@@ -5,8 +5,26 @@
 const CONFIG = {
     username: "mythicalpengu",
 
-    // the real address of the site (shown in the boot animation)
-    siteHost: "mysticalpengu.github.io",
+    // the main address of the site (shown in the boot animation)
+    siteHost: "mythicalpengu.pages.dev",
+
+    // every address that should reach the site. these are cloudflare pages custom domains
+    // (each one's dns record is a CNAME to mythicalpengu.pages.dev). the notes api lists the
+    // same origins in backend/wrangler.toml + wrangler.toml, so add new ones in all three places.
+    domains: [
+        "mythicalpengu.pages.dev",
+        "mythicalpengu.is-a.dev",
+        "mythicalpengu.is-my.id",
+        "mythicalpengu.part-of.my.id",
+        "mythicalpengu.is-not.cool",
+        "mythicalpengu.is-a.bot",
+        "mythicalpengu.is-a-fullstack.dev",
+        "mythicalpengu.is-cool.dev",
+        "mythicalpengu.is-local.org",
+        "mythicalpengu.localplayer.dev",
+        "mythicalpengu.living-the.life",
+        "mythicalpengu.is-not-a.dev",
+    ],
 
     discordUserId: "1497173080131371048",
     discordUsername: "mythicalpengu",
