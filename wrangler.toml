@@ -1,0 +1,26 @@
+# root copy of backend/wrangler.toml.
+#
+# cloudflare's git build for the notes worker runs `npx wrangler deploy`. if its root directory
+# is the repo root (not backend/), wrangler finds no config here, decides the repo is a static
+# site and deploys the whole website OVER the notes api. this file makes a root-directory build
+# deploy the real worker instead. when root directory is `backend`, backend/wrangler.toml is used
+# and this file is simply ignored. keep the two files in sync (same name, kv id and ALLOWED_ORIGIN).
+# (cloudflare pages ignores this file because it has no pages_build_output_dir.)
+
+name = "mythicalpengu-notes"
+main = "backend/src/worker.js"
+compatibility_date = "2024-09-01"
+
+[[kv_namespaces]]
+binding = "NOTES_KV"
+id = "78535462ce8742d5b1750be87fe463fe"
+
+[vars]
+# origins allowed to call the api (no trailing slash). comma-separate to add more,
+# e.g. "https://mysticalpengu.github.io,http://localhost:8080" for local dev
+ALLOWED_ORIGIN = "https://mysticalpengu.github.io,https://mythicalpengu.is-a.dev,https://mythicalpengu.is-not.cool,https://mythicalpengu.is-a.bot,https://mythicalpengu.part-of.my.id,https://mythicalpengu.is-my.id,https://mythicalpengu.is-a-fullstack.dev,https://mythicalpengu.is-cool.dev,https://mythicalpengu.is-local.org,https://mythicalpengu.localplayer.dev,https://mythicalpengu.living-the.life,https://mythicalpengu.is-not-a.dev,https://mythicalpengu.pages.dev"
+
+# secrets (set with `wrangler secret put <NAME>`, never commit them):
+#   OWNER_PASSWORD   the password you log in with — long passphrase, 16+ characters
+#   SESSION_SECRET   random string that signs login tokens, e.g. `openssl rand -hex 32`
+#                    (changing it logs everyone out)
